@@ -38,3 +38,83 @@ impl Build {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::arch::Arch;
+    use super::compression::Compression;
+    use super::os::Os;
+    use super::*;
+
+    #[test]
+    fn should_validate_if_multi_target() {
+        let build = Build {
+            binary: "binary".to_string(),
+            compression: Compression::TarGz,
+            arch: Some(vec![Arch::Amd64]),
+            os: Some(vec![Os::UnknownLinuxGnu]),
+        };
+
+        assert!(build.is_multi_target());
+    }
+
+    #[test]
+    fn should_validate_id_single_target() {
+        let build = Build {
+            binary: "binary".to_string(),
+            compression: Compression::TarGz,
+            arch: None,
+            os: None,
+        };
+
+        assert!(!build.is_multi_target());
+    }
+
+    #[test]
+    fn should_validate_if_multi_arch() {
+        let build = Build {
+            binary: "binary".to_string(),
+            compression: Compression::TarGz,
+            arch: Some(vec![Arch::Amd64]),
+            os: None,
+        };
+
+        assert!(build.is_multi_arch());
+    }
+
+    #[test]
+    fn should_validate_if_single_arch() {
+        let build = Build {
+            binary: "binary".to_string(),
+            compression: Compression::TarGz,
+            arch: None,
+            os: None,
+        };
+
+        assert!(!build.is_multi_arch());
+    }
+
+    #[test]
+    fn should_validate_if_multi_os() {
+        let build = Build {
+            binary: "binary".to_string(),
+            compression: Compression::TarGz,
+            arch: None,
+            os: Some(vec![Os::UnknownLinuxGnu]),
+        };
+
+        assert!(build.is_multi_os());
+    }
+
+    #[test]
+    fn should_validate_if_single_os() {
+        let build = Build {
+            binary: "binary".to_string(),
+            compression: Compression::TarGz,
+            arch: None,
+            os: None,
+        };
+
+        assert!(!build.is_multi_os());
+    }
+}

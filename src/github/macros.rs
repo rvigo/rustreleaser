@@ -81,3 +81,119 @@ macro_rules! form {
             .await
     }};
 }
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+    use mockito::Server;
+    use std::env;
+    use tokio::join;
+
+    #[tokio::test]
+    async fn put_macro() -> Result<()> {
+        env::set_var("GITHUB_TOKEN", "token");
+        let mut server = Server::new_async().await;
+        let url = server.url();
+
+        let expected_body = "test_body";
+        let mock_future = server
+            .mock("PUT", "/")
+            .with_header("authorization", "Bearer test_token")
+            .with_header("accept", "application/vnd.github.VERSION.sha")
+            .with_header("x-github-api-version", "2022-11-28")
+            .with_header("user-agent", "rustreleaser")
+            .with_body(expected_body)
+            .create_async();
+
+        let (m, ..) = join!(mock_future);
+
+        let response = put!(url, expected_body)?;
+
+        m.assert_async().await;
+        assert_eq!(response, expected_body);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn get_macro() -> Result<()> {
+        env::set_var("GITHUB_TOKEN", "token");
+        let mut server = Server::new_async().await;
+        let url = server.url();
+
+        let expected_body = "test_body";
+
+        let mock_future = server
+            .mock("GET", "/")
+            .with_header("authorization", "Bearer test_token")
+            .with_header("accept", "application/vnd.github.VERSION.sha")
+            .with_header("x-github-api-version", "2022-11-28")
+            .with_header("user-agent", "rustreleaser")
+            .with_body(expected_body)
+            .create_async();
+
+        let (m, ..) = join!(mock_future);
+
+        let response = get!(url)?;
+
+        m.assert_async().await;
+
+        assert_eq!(response, expected_body);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn post_macro() -> Result<()> {
+        env::set_var("GITHUB_TOKEN", "token");
+        let mut server = Server::new_async().await;
+        let url = server.url();
+
+        let expected_body = "test_body";
+        let mock_future = server
+            .mock("POST", "/")
+            .with_header("authorization", "Bearer test_token")
+            .with_header("accept", "application/vnd.github.VERSION.sha")
+            .with_header("x-github-api-version", "2022-11-28")
+            .with_header("user-agent", "rustreleaser")
+            .with_body(expected_body)
+            .create_async();
+
+        let (m, ..) = join!(mock_future);
+
+        let response = post!(url, expected_body)?;
+
+        m.assert_async().await;
+        assert_eq!(response, expected_body);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn form_macro() -> Result<()> {
+        env::set_var("GITHUB_TOKEN", "token");
+        let mut server = Server::new_async().await;
+        let url = server.url();
+
+        let expected_body = "test_body";
+        let mock_future = server
+            .mock("POST", "/")
+            .with_header("authorization", "Bearer test_token")
+            .with_header("accept", "application/vnd.github.VERSION.sha")
+            .with_header("x-github-api-version", "2022-11-28")
+            .with_header("user-agent", "rustreleaser")
+            .with_header("content-type", "application/octet-stream")
+            .with_body(expected_body)
+            .create_async();
+
+        let (m, ..) = join!(mock_future);
+
+        let form = reqwest::multipart::Form::new().text("key", "value");
+        let response = form!(url, form)?;
+
+        m.assert_async().await;
+        assert_eq!(response, expected_body);
+
+        Ok(())
+    }
+}

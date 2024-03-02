@@ -30,3 +30,36 @@ impl Tag {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_create_a_new_tag() {
+        let tag = Tag::new("v1.0.0");
+
+        assert_eq!(tag.value(), "v1.0.0");
+    }
+
+    #[test]
+    fn should_strip_v_prefix() {
+        let tag = Tag::new("v1.0.0");
+
+        assert_eq!(tag.strip_v_prefix(), "1.0.0");
+    }
+
+    #[test]
+    fn should_return_the_same_value_when_strip_with_no_v() {
+        let tag = Tag::new("1.0.0");
+
+        assert_eq!(tag.strip_v_prefix(), "1.0.0");
+    }
+
+    #[test]
+    fn should_create_a_empty_tag() {
+        let tag = Tag::empty();
+
+        assert_eq!(tag.value(), "");
+    }
+}
