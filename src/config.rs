@@ -11,6 +11,8 @@ const BREW_DEFAULT_COMMIT_MESSAGE: &str = "update formula";
 const PR_DEFAULT_BASE_BRANCH_NAME: &str = MAIN_BRANCH_NAME;
 const PR_DEFAULT_HEAD_BRANCH_NAME: &str = "bumps-formula-version";
 
+const DEFAULT_CONFIG_FILE_NAME: &str = "rustreleaser.yaml";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub build: Build,
@@ -20,7 +22,7 @@ pub struct Config {
 
 impl Config {
     pub async fn load() -> Result<Config> {
-        let config_string = tokio::fs::read_to_string("config.yaml").await?;
+        let config_string = tokio::fs::read_to_string(DEFAULT_CONFIG_FILE_NAME).await?;
 
         let config = serde_yaml::from_str::<Config>(&config_string)?;
 
