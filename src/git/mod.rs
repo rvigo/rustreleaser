@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
 use git2::Repository;
+use itertools::Itertools;
 
 use crate::github::tag::Tag;
 
@@ -8,7 +9,7 @@ pub fn get_current_tag() -> Result<Tag> {
 
     let binding = repo.tag_names(None)?;
 
-    let tag = match binding.into_iter().rev().last().unwrap_or_default() {
+    let tag = match binding.into_iter().sorted().last().unwrap_or_default() {
         Some(tag) => tag,
         None => bail!(anyhow::anyhow!("No tags found")),
     };
@@ -52,6 +53,24 @@ mod tests {
         let obj = &repo.revparse_single("HEAD")?;
         repo.tag("v1.0.0", obj, &signature, "Version 1.0.0", false)?;
 
+        println!("creating commit 2");
+
+        let oid = index.write_tree()?;
+        let parent_commit = repo.head()?.peel_to_commit()?;
+
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "commit",
+            &repo.find_tree(oid)?,
+            &[&parent_commit],
+        )?;
+
+        println!("creating tag 2");
+        let obj = &repo.revparse_single("HEAD")?;
+        repo.tag("v2.0.0", obj, &signature, "Version 2.0.0", false)?;
+
         // Change the current directory to the repository directory.
         std::env::set_current_dir(dir.path())?;
 
@@ -59,7 +78,7 @@ mod tests {
         let tag = get_current_tag()?;
 
         // The tag should be "v1.0.0".
-        assert_eq!(tag.value(), "v1.0.0");
+        assert_eq!(tag.value(), "v2.0.0");
 
         // Delete the temporary directory.
         dir.close()?;

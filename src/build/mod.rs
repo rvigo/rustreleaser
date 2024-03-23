@@ -2,8 +2,9 @@ pub mod arch;
 pub mod committer;
 pub mod compression;
 pub mod os;
+pub mod prebuilt;
 
-use self::compression::Compression;
+use self::{compression::Compression, prebuilt::PreBuilt};
 use arch::Arch;
 use os::Os;
 use serde::{Deserialize, Serialize};
@@ -15,6 +16,9 @@ pub struct Build {
     pub binary: String,
     #[serde(default)]
     pub compression: Compression,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(flatten)]
+    pub prebuilt: Option<PreBuilt>,
 }
 
 impl Build {
@@ -37,6 +41,10 @@ impl Build {
             false
         }
     }
+
+    pub fn has_prebuilt(&self) -> bool {
+        self.prebuilt.is_some()
+    }
 }
 
 #[cfg(test)]
@@ -53,6 +61,7 @@ mod tests {
             compression: Compression::TarGz,
             arch: Some(vec![Arch::Amd64]),
             os: Some(vec![Os::UnknownLinuxGnu]),
+            prebuilt: None,
         };
 
         assert!(build.is_multi_target());
@@ -65,6 +74,7 @@ mod tests {
             compression: Compression::TarGz,
             arch: None,
             os: None,
+            prebuilt: None,
         };
 
         assert!(!build.is_multi_target());
@@ -77,6 +87,7 @@ mod tests {
             compression: Compression::TarGz,
             arch: Some(vec![Arch::Amd64]),
             os: None,
+            prebuilt: None,
         };
 
         assert!(build.is_multi_arch());
@@ -89,6 +100,7 @@ mod tests {
             compression: Compression::TarGz,
             arch: None,
             os: None,
+            prebuilt: None,
         };
 
         assert!(!build.is_multi_arch());
@@ -101,6 +113,7 @@ mod tests {
             compression: Compression::TarGz,
             arch: None,
             os: Some(vec![Os::UnknownLinuxGnu]),
+            prebuilt: None,
         };
 
         assert!(build.is_multi_os());
@@ -113,6 +126,7 @@ mod tests {
             compression: Compression::TarGz,
             arch: None,
             os: None,
+            prebuilt: None,
         };
 
         assert!(!build.is_multi_os());

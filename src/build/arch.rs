@@ -6,6 +6,8 @@ pub enum Arch {
     #[serde(rename(deserialize = "amd64"))]
     Amd64,
     Arm,
+    #[serde(rename(deserialize = "aarch64"))]
+    #[serde(rename(deserialize = "arm64"))]
     Arm64,
 }
 

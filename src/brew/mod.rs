@@ -77,9 +77,10 @@ pub async fn release(
     let brew = Brew::new(brew_config, git::get_current_tag()?, packages);
 
     log::debug!("Rendering Formula template {}", template.to_string());
+
     let data = serialize_brew(&brew, template)?;
 
-    write_file(format!("{}.rb", brew.name), &data)?;
+    write_file(format!("{}.rb", brew.name.to_lowercase()), &data)?;
 
     if brew.pull_request.is_some() {
         log::debug!("Creating pull request");
@@ -90,7 +91,7 @@ pub async fn release(
             .repo(&brew.repository.owner, &brew.repository.name)
             .branch(&brew.head)
             .upsert_file()
-            .path(format!("{}.rb", brew.name))
+            .path(format!("{}.rb", brew.name.to_lowercase()))
             .message(brew.commit_message)
             .content(&data)
             .execute()
@@ -180,7 +181,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
 
 impl From<Vec<Package>> for Targets {
     fn from(value: Vec<Package>) -> Targets {
-        let v: Vec<Target> = if value.is_empty() {
+        let targets: Vec<Target> = if value.is_empty() {
             vec![]
         } else if value[0].arch.is_none() && value[0].os.is_none() {
             let target = vec![Target::Single(SingleTarget {
@@ -211,7 +212,7 @@ impl From<Vec<Package>> for Targets {
             group
         };
 
-        Targets(v)
+        Targets(targets)
     }
 }
 

@@ -13,15 +13,15 @@ use super::{
 };
 use crate::{
     build::committer::Committer,
-    form, get,
+    get,
     github::{release::Release, request::upsert_file_request::UpsertFileRequest},
-    post, put,
+    post, put, upload_file,
 };
 use anyhow::{Context, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use once_cell::sync::Lazy;
-use reqwest::multipart::{Form, Part};
 use std::env;
+use tokio::{fs::File, io::AsyncReadExt};
 
 pub static GITHUB_TOKEN: Lazy<String> =
     Lazy::new(|| env::var("GITHUB_TOKEN").expect("GITHUB_TOKEN must be set"));
@@ -50,11 +50,10 @@ impl GithubClient {
         repo: impl Into<String>,
         release_id: u64,
     ) -> Result<UploadedAsset> {
-        let content: Vec<u8> = tokio::fs::read(&asset.path).await?;
+        let mut file = File::open(&asset.path).await?;
+        let mut content = vec![];
 
-        let part = Part::bytes(content).file_name(asset.name.to_owned());
-
-        let form = Form::new().part("data-binary", part);
+        file.read_to_end(&mut content).await?;
 
         let owner = owner.into();
         let repo = repo.into();
@@ -64,7 +63,7 @@ impl GithubClient {
             &owner, &repo, release_id, asset.name
         );
 
-        form!(uri, form)?;
+        upload_file!(uri, content)?;
 
         let asset_url = format!(
             "https://github.com/{}/{}/releases/download/v{}/{}",

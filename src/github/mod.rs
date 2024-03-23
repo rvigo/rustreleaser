@@ -15,14 +15,15 @@ use self::{
 };
 use crate::{
     brew::package::Package,
-    build::{arch::Arch, os::Os, Build},
+    build::{arch::Arch, compression::Compression, os::Os, prebuilt::PreBuilt, Build},
     checksum,
     config::ReleaseConfig,
     git,
     github::{arch_os_matrix::PushArchOsMatrix, asset::Asset},
 };
 use anyhow::{bail, Result};
-use flate2::{write::GzEncoder, Compression};
+use flate2::write::GzEncoder;
+use itertools::Itertools;
 use std::{
     fs::{self, File},
     future::Future,
@@ -35,7 +36,10 @@ use tar::Builder;
 const SINGLE_TARGET_DIR: &str = "target/release";
 
 pub async fn release(build_info: &Build, release_info: &ReleaseConfig) -> Result<Vec<Package>> {
-    let packages = if build_info.is_multi_target() {
+    let packages = if let Some(pb) = &build_info.prebuilt {
+        log::debug!("Running prebuilt, ignoring build info");
+        prebuilt(pb, release_info.to_owned(), &build_info.compression).await?
+    } else if build_info.is_multi_target() {
         log::debug!("Running multi target");
         multi(build_info.to_owned(), release_info.to_owned()).await?
     } else {
@@ -88,7 +92,7 @@ async fn single(build_info: Build, release_info: ReleaseConfig) -> Result<Vec<Pa
     log::debug!("creating release");
 
     let release = get_release(release_info, &tag, do_create_release, get_release_by_tag).await?;
-
+    log::info!("release: {:#?}", release);
     // upload to release
     log::debug!("uploading asset");
     let uploaded_assets = match release.upload_assets(vec![asset], &tag).await {
@@ -108,23 +112,23 @@ async fn single(build_info: Build, release_info: ReleaseConfig) -> Result<Vec<Pa
     Ok(packages)
 }
 
-async fn multi(build_info: Build, release_info: ReleaseConfig) -> Result<Vec<Package>> {
+async fn multi(build: Build, release_config: ReleaseConfig) -> Result<Vec<Package>> {
     let tag = git::get_current_tag()?;
 
-    let archs = build_info.arch.unwrap_or_default();
-    let os = build_info.os.unwrap_or_default();
+    let archs = build.arch.unwrap_or_default();
+    let os = build.os.unwrap_or_default();
     let mut matrix: Vec<ArchOsMatrixEntry> = Vec::new();
 
     for arch in &archs {
         for os in &os {
-            let binary = build_info.binary.to_owned();
+            let binary = build.binary.to_owned();
             check_binary(
                 &binary,
                 Some(format!("{}-{}", &arch.to_string(), &os.to_string())),
             )?;
 
             let mut entry =
-                ArchOsMatrixEntry::new(arch, os, binary, tag.value(), &build_info.compression);
+                ArchOsMatrixEntry::new(arch, os, binary, tag.value(), &build.compression);
 
             let target = format!("{}-{}", &arch.to_string(), &os.to_string());
 
@@ -134,9 +138,9 @@ async fn multi(build_info: Build, release_info: ReleaseConfig) -> Result<Vec<Pac
 
             // zip binary
             zip_file(
-                &build_info.binary.to_owned(),
+                &build.binary.to_owned(),
                 &entry_name,
-                PathBuf::from(format!("target/{}/release/{}", target, build_info.binary)),
+                PathBuf::from(format!("target/{}/release/{}", target, build.binary)),
             )?;
 
             // create an asset
@@ -154,7 +158,7 @@ async fn multi(build_info: Build, release_info: ReleaseConfig) -> Result<Vec<Pac
         }
     }
 
-    let release = get_release(release_info, &tag, do_create_release, get_release_by_tag).await?;
+    let release = get_release(release_config, &tag, do_create_release, get_release_by_tag).await?;
 
     let assets: Vec<Asset> = matrix
         .iter()
@@ -180,6 +184,91 @@ async fn multi(build_info: Build, release_info: ReleaseConfig) -> Result<Vec<Pac
     Ok(packages)
 }
 
+pub async fn prebuilt(
+    pre_built: &PreBuilt,
+    release_config: ReleaseConfig,
+    compression: &Compression,
+) -> Result<Vec<Package>> {
+    let mut matrix: Vec<ArchOsMatrixEntry> = Vec::new();
+
+    let tag = git::get_current_tag()?;
+    for f in pre_built.iter() {
+        let path = f.path.to_owned();
+        if path.is_dir() {
+            log::info!("path is a directory, ignoring");
+            continue;
+        }
+        let name = path.file_name().unwrap().to_str().unwrap().to_owned();
+        let mut entry = ArchOsMatrixEntry::new(
+            &f.arch.as_ref().unwrap(),
+            &f.os.as_ref().unwrap(),
+            name.clone(),
+            tag.value(),
+            &compression,
+        );
+
+        zip_file(&name, &name, path.to_owned())?;
+
+        let mut asset = create_asset(name, path);
+
+        let checksum = generate_checksum(&asset)
+            .unwrap_or_else(|_| panic!("Failed to generate checksum for asset {:#?}", asset));
+
+        asset.add_checksum(checksum);
+        entry.set_asset(asset);
+        matrix.push_entry(entry);
+    }
+    let release = get_release(
+        release_config.to_owned(),
+        &tag,
+        do_create_release,
+        get_release_by_tag,
+    )
+    .await?;
+
+    let assets: Vec<Asset> = matrix
+        .iter()
+        .cloned()
+        .filter_map(|entry| entry.asset)
+        .collect();
+    // upload to release
+    log::debug!("uploading asset");
+
+    let uploaded_assets = match release.upload_assets(assets, &tag).await {
+        Ok(uploaded_assets) => uploaded_assets,
+        Err(e) => {
+            log::error!("Failed to upload asset {:#?}", e);
+            bail!(anyhow::anyhow!("Failed to upload asset"))
+        }
+    };
+
+    println!(
+        "{:#?}",
+        uploaded_assets
+            .iter()
+            .map(|u| u.name.to_owned())
+            .collect_vec()
+    );
+    println!(
+        "{:#?}",
+        matrix.iter().map(|m| m.name.to_owned()).collect_vec()
+    );
+
+    let packages: Vec<Package> = matrix
+        .into_iter()
+        .map(|entry| {
+            let asset = uploaded_assets
+                .iter()
+                .find(|asset| asset.name == entry.asset.as_ref().expect("asset not present").name)
+                .expect("asset not found");
+
+            package_asset(asset, Some(entry.os), Some(entry.arch))
+        })
+        .collect();
+
+    Ok(packages)
+}
+
 fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> Result<()> {
     let mut file = File::open(binary_path)?;
     let mut archive = Builder::new(Vec::new());
@@ -187,10 +276,10 @@ fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> 
     archive.append_file(binary_name, &mut file)?;
 
     let compressed_file = File::create(full_binary_name)?;
-    let mut encoder = GzEncoder::new(compressed_file, Compression::Default);
+    let mut encoder = GzEncoder::new(compressed_file, flate2::Compression::Default);
     encoder.write_all(&archive.into_inner()?)?;
 
-    encoder.finish()?;
+    encoder.try_finish()?;
 
     Ok(())
 }
@@ -211,31 +300,31 @@ fn check_binary(name: &str, target: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn do_create_release(release_info: ReleaseConfig, tag: &Tag) -> Result<Release> {
+async fn do_create_release(release_config: ReleaseConfig, tag: &Tag) -> Result<Release> {
     github_client::instance()
-        .repo(&release_info.owner, &release_info.repo)
+        .repo(&release_config.owner, &release_config.repo)
         .releases()
         .create()
         .tag(tag)
-        .target_branch(&release_info.target_branch)
-        .name(&release_info.name)
-        .draft(release_info.draft)
-        .prerelease(release_info.prerelease)
-        .body(release_info.body.unwrap_or_default())
+        .target_branch(&release_config.target_branch)
+        .name(&release_config.name)
+        .draft(release_config.draft)
+        .prerelease(release_config.prerelease)
+        .body(release_config.body.unwrap_or_default())
         .execute()
         .await
 }
 
-async fn get_release_by_tag(release_info: ReleaseConfig, tag: &Tag) -> Result<Release> {
+async fn get_release_by_tag(release_config: ReleaseConfig, tag: &Tag) -> Result<Release> {
     github_client::instance()
-        .repo(&release_info.owner, &release_info.repo)
+        .repo(&release_config.owner, &release_config.repo)
         .releases()
         .get_by_tag(tag)
         .await
 }
 
 async fn get_release<'tag, F, C, FO, CO>(
-    release_info: ReleaseConfig,
+    release_config: ReleaseConfig,
     tag: &'tag Tag,
     function: F,
     callback: C,
@@ -246,7 +335,7 @@ where
     FO: Future<Output = Result<Release>>,
     CO: Future<Output = Result<Release>>,
 {
-    let res = function(release_info.to_owned(), tag).await;
+    let res = function(release_config.to_owned(), tag).await;
     match res {
         Ok(release) => Ok(release),
         Err(err) => {
@@ -254,7 +343,7 @@ where
                 "cannot create a release, trying to get the release by tag: {:?}",
                 err
             );
-            callback(release_info, tag).await
+            callback(release_config, tag).await
         }
     }
 }
