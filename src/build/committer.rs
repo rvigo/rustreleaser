@@ -8,7 +8,7 @@ impl Default for Committer {
     fn default() -> Self {
         Committer {
             author: "Rafael Vigo".to_string(),
-            email: "rvigo07+github@gmail.com".to_string(),
+            email: "19755627+rvigo@users.noreply.github.com".to_string(),
         }
     }
 }
