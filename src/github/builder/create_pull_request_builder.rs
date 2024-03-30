@@ -1,7 +1,10 @@
 use super::BuilderExecutor;
 use crate::{
     build::committer::Committer,
-    github::{github_client, response::pull_request_response::PullRequest},
+    github::{
+        dto::pull_request_dto::PullRequestDto, github_client,
+        response::pull_request_response::PullRequest,
+    },
 };
 
 pub struct CreatePullRequestBuilder {
@@ -17,10 +20,7 @@ pub struct CreatePullRequestBuilder {
 }
 
 impl CreatePullRequestBuilder {
-    pub fn new<S>(owner: S, repo: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new(owner: impl Into<String>, repo: impl Into<String>) -> Self {
         CreatePullRequestBuilder {
             owner: owner.into(),
             repo: repo.into(),
@@ -34,18 +34,12 @@ impl CreatePullRequestBuilder {
         }
     }
 
-    pub fn title<S>(mut self, title: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = title.into();
         self
     }
 
-    pub fn body<S>(mut self, body: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn body(mut self, body: impl Into<String>) -> Self {
         self.body = Some(body.into());
         self
     }
@@ -65,18 +59,12 @@ impl CreatePullRequestBuilder {
         self
     }
 
-    pub fn base<S>(mut self, base: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn base(mut self, base: impl Into<String>) -> Self {
         self.base = base.into();
         self
     }
 
-    pub fn head<S>(mut self, head: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn head(mut self, head: impl Into<String>) -> Self {
         self.head = head.into();
         self
     }
@@ -86,17 +74,17 @@ impl BuilderExecutor for CreatePullRequestBuilder {
     type Output = PullRequest;
 
     async fn execute(self) -> anyhow::Result<Self::Output> {
-        github_client::instance()
-            .create_pull_request(
-                &self.owner,
-                &self.repo,
-                &self.title,
-                &self.head,
-                &self.base,
-                &self.body.unwrap_or_default(),
-                self.assignees.unwrap_or_default(),
-                self.labels.unwrap_or_default(),
-            )
-            .await
+        let pr = PullRequestDto::new(
+            self.owner,
+            self.repo,
+            self.title,
+            self.head,
+            self.base,
+            self.body.unwrap_or_default(),
+            self.assignees.unwrap_or_default(),
+            self.labels.unwrap_or_default(),
+        );
+
+        github_client::instance().create_pull_request(pr).await
     }
 }

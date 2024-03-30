@@ -10,10 +10,11 @@ pub struct BranchHandler {
 }
 
 impl BranchHandler {
-    pub fn new<S>(owner: S, repo: S, branch: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new(
+        owner: impl Into<String>,
+        repo: impl Into<String>,
+        branch: impl Into<String>,
+    ) -> Self {
         BranchHandler {
             owner: owner.into(),
             repo: repo.into(),
@@ -22,11 +23,7 @@ impl BranchHandler {
     }
 
     pub fn upsert_file(&self) -> UpsertFileBuilder {
-        UpsertFileBuilder::new(
-            self.owner.to_owned(),
-            self.repo.to_owned(),
-            self.base.to_owned(),
-        )
+        UpsertFileBuilder::new(&self.owner, &self.repo, &self.base)
     }
 
     pub async fn get_commit_sha(&self) -> Result<Sha> {

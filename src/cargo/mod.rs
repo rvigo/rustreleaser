@@ -69,8 +69,7 @@ async fn create_commands(matrix: Vec<ArchOsMatrixEntry>) -> Result<Vec<CustomCom
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit());
 
-        let custom_command = CustomCommand::new(command, entry.to_owned());
-        custom_command
+        CustomCommand::new(command, entry.to_owned())
     });
 
     Ok(commands.collect())

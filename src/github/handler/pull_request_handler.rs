@@ -6,10 +6,7 @@ pub struct PullRequestHandler {
 }
 
 impl PullRequestHandler {
-    pub fn new<S>(owner: S, repo: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new(owner: impl Into<String>, repo: impl Into<String>) -> Self {
         PullRequestHandler {
             owner: owner.into(),
             repo: repo.into(),
@@ -17,6 +14,6 @@ impl PullRequestHandler {
     }
 
     pub fn create(&self) -> CreatePullRequestBuilder {
-        CreatePullRequestBuilder::new(self.owner.to_owned(), self.repo.to_owned())
+        CreatePullRequestBuilder::new(&self.owner, &self.repo)
     }
 }

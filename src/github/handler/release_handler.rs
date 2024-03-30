@@ -10,10 +10,7 @@ pub struct ReleaseHandler {
 }
 
 impl ReleaseHandler {
-    pub fn new<S>(owner: S, repo: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new(owner: impl Into<String>, repo: impl Into<String>) -> Self {
         ReleaseHandler {
             owner: owner.into(),
             repo: repo.into(),
@@ -21,7 +18,7 @@ impl ReleaseHandler {
     }
 
     pub fn create(&self) -> CreateReleaseBuilder {
-        CreateReleaseBuilder::new(self.owner.to_owned(), self.repo.to_owned())
+        CreateReleaseBuilder::new(&self.owner, &self.repo)
     }
 
     pub async fn get_by_tag(&self, tag: &Tag) -> Result<Release> {

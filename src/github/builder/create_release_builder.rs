@@ -1,5 +1,5 @@
 use super::BuilderExecutor;
-use crate::github::{github_client, release::Release, tag::Tag};
+use crate::github::{dto::release_dto::ReleaseDto, github_client, release::Release, tag::Tag};
 use anyhow::Result;
 
 pub struct CreateReleaseBuilder {
@@ -14,10 +14,10 @@ pub struct CreateReleaseBuilder {
 }
 
 impl CreateReleaseBuilder {
-    pub fn new(owner: String, repo: String) -> Self {
+    pub fn new(owner: impl Into<String>, repo: impl Into<String>) -> Self {
         CreateReleaseBuilder {
-            owner,
-            repo,
+            owner: owner.into(),
+            repo: repo.into(),
             release_name: String::new(),
             release_tag: Tag::empty(),
             target_branch: String::new(),
@@ -27,10 +27,7 @@ impl CreateReleaseBuilder {
         }
     }
 
-    pub fn name<S>(mut self, release_name: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn name(mut self, release_name: impl Into<String>) -> Self {
         self.release_name = release_name.into();
         self
     }
@@ -40,10 +37,7 @@ impl CreateReleaseBuilder {
         self
     }
 
-    pub fn target_branch<S>(mut self, target_branch: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn target_branch(mut self, target_branch: impl Into<String>) -> Self {
         self.target_branch = target_branch.into();
         self
     }
@@ -58,10 +52,7 @@ impl CreateReleaseBuilder {
         self
     }
 
-    pub fn body<S>(mut self, body: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn body(mut self, body: impl Into<String>) -> Self {
         self.body = Some(body.into());
         self
     }
@@ -71,17 +62,16 @@ impl BuilderExecutor for CreateReleaseBuilder {
     type Output = Release;
 
     async fn execute(self) -> Result<Release> {
-        github_client::instance()
-            .create_release(
-                &self.owner,
-                &self.repo,
-                &self.release_tag,
-                &self.target_branch,
-                &self.release_name,
-                self.draft.unwrap(),
-                self.prerelease.unwrap(),
-                &self.body.unwrap_or_default(),
-            )
-            .await
+        let release = ReleaseDto::new(
+            self.owner,
+            self.repo,
+            self.release_tag,
+            self.target_branch,
+            self.release_name,
+            self.draft.unwrap(),
+            self.prerelease.unwrap(),
+            self.body.unwrap_or_default(),
+        );
+        github_client::instance().create_release(release).await
     }
 }

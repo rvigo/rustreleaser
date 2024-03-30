@@ -15,11 +15,11 @@ pub struct PreBuiltAsset {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PreBuilt {
+pub struct PreBuiltItems {
     pub prebuilt: Vec<PreBuiltAsset>,
 }
 
-impl Deref for PreBuilt {
+impl Deref for PreBuiltItems {
     type Target = Vec<PreBuiltAsset>;
 
     fn deref(&self) -> &Self::Target {
@@ -27,13 +27,13 @@ impl Deref for PreBuilt {
     }
 }
 
-impl DerefMut for PreBuilt {
+impl DerefMut for PreBuiltItems {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.prebuilt
     }
 }
 
-impl PreBuilt {
+impl PreBuiltItems {
     pub fn is_multi_target(&self) -> bool {
         self.len() > 1 && (self.is_multi_arch() || self.is_multi_os())
     }

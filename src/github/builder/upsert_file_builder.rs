@@ -1,5 +1,8 @@
 use super::BuilderExecutor;
-use crate::{build::committer::Committer, github::github_client};
+use crate::{
+    build::committer::Committer,
+    github::{dto::commit_info_dto::CommitInfoDto, github_client},
+};
 
 pub struct UpsertFileBuilder {
     owner: String,
@@ -12,11 +15,11 @@ pub struct UpsertFileBuilder {
 }
 
 impl UpsertFileBuilder {
-    pub fn new<S, T>(owner: S, repo: T, branch: S) -> Self
-    where
-        S: Into<String>,
-        T: Into<String>,
-    {
+    pub fn new(
+        owner: impl Into<String>,
+        repo: impl Into<String>,
+        branch: impl Into<String>,
+    ) -> Self {
         UpsertFileBuilder {
             owner: owner.into(),
             repo: repo.into(),
@@ -28,26 +31,17 @@ impl UpsertFileBuilder {
         }
     }
 
-    pub fn path<S>(mut self, path: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn path(mut self, path: impl Into<String>) -> Self {
         self.path = path.into();
         self
     }
 
-    pub fn message<S>(mut self, message: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn message(mut self, message: impl Into<String>) -> Self {
         self.commit_message = message.into();
         self
     }
 
-    pub fn content<S>(mut self, content: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn content(mut self, content: impl Into<String>) -> Self {
         self.content = content.into();
         self
     }
@@ -62,15 +56,16 @@ impl BuilderExecutor for UpsertFileBuilder {
     type Output = ();
 
     async fn execute(self) -> anyhow::Result<Self::Output> {
+        let commit_info = CommitInfoDto::new(&self.commit_message, &self.committer);
+
         github_client::instance()
             .upsert_file(
                 &self.owner,
                 &self.repo,
                 &self.path,
                 &self.content,
-                self.commit_message,
-                self.committer,
                 self.head,
+                commit_info,
             )
             .await
     }

@@ -1,20 +1,25 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct PullRquestRequest {
+pub struct PullRequestRequest {
     pub title: String,
     pub head: String,
     pub base: String,
     pub body: String,
 }
 
-impl PullRquestRequest {
-    pub fn new(title: String, head: String, base: String, body: String) -> Self {
+impl PullRequestRequest {
+    pub fn new(
+        title: impl Into<String>,
+        head: impl Into<String>,
+        base: impl Into<String>,
+        body: impl Into<String>,
+    ) -> Self {
         Self {
-            title,
-            head,
-            base,
-            body,
+            title: title.into(),
+            head: head.into(),
+            base: base.into(),
+            body: body.into(),
         }
     }
 }

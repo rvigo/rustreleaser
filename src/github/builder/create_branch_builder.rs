@@ -10,11 +10,7 @@ pub struct CreateBranchBuilder {
 }
 
 impl CreateBranchBuilder {
-    pub fn new<S, T>(owner: S, repo: T) -> Self
-    where
-        S: Into<String>,
-        T: Into<String>,
-    {
+    pub fn new(owner: impl Into<String>, repo: impl Into<String>) -> Self {
         CreateBranchBuilder {
             owner: owner.into(),
             repo: repo.into(),
@@ -23,18 +19,12 @@ impl CreateBranchBuilder {
         }
     }
 
-    pub fn branch<S>(mut self, branch: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn branch(mut self, branch: impl Into<String>) -> Self {
         self.branch = branch.into();
         self
     }
 
-    pub fn sha<S>(mut self, sha: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn sha(mut self, sha: impl Into<String>) -> Self {
         self.sha = sha.into();
         self
     }

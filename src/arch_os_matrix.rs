@@ -15,12 +15,19 @@ impl ArchOsMatrixEntry {
     }
 }
 
-pub trait PushArchOsMatrix {
-    fn push_entry(&mut self, entry: ArchOsMatrixEntry);
+pub trait Entry {}
+
+impl Entry for ArchOsMatrixEntry {}
+
+pub trait ArchOsMatrix<T> {
+    fn push_entry(&mut self, entry: T);
 }
 
-impl PushArchOsMatrix for Vec<ArchOsMatrixEntry> {
-    fn push_entry(&mut self, entry: ArchOsMatrixEntry) {
+impl<T> ArchOsMatrix<T> for Vec<T>
+where
+    T: Entry,
+{
+    fn push_entry(&mut self, entry: T) {
         self.push(entry);
     }
 }
@@ -35,11 +42,11 @@ impl From<Build> for Vec<ArchOsMatrixEntry> {
     fn from(build: Build) -> Self {
         let mut matrix = Vec::new();
 
-        if let Some(archs) = build.arch {
+        if let Some(archs) = &build.arch {
             if let Some(oss) = &build.os {
                 for arch in archs {
                     for os in oss {
-                        matrix.push_entry(ArchOsMatrixEntry::new(&arch, &os));
+                        matrix.push_entry(ArchOsMatrixEntry::new(arch, os));
                     }
                 }
             }

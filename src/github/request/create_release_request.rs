@@ -12,18 +12,18 @@ pub struct CreateReleaseRequest {
 
 impl CreateReleaseRequest {
     pub fn new(
-        tag_name: String,
-        target_commitish: String,
-        name: String,
-        body: String,
+        tag_name: impl Into<String>,
+        target_commitish: impl Into<String>,
+        name: impl Into<String>,
+        body: impl Into<String>,
         draft: bool,
         prerelease: bool,
     ) -> Self {
         Self {
-            tag_name,
-            target_commitish,
-            name,
-            body,
+            tag_name: tag_name.into(),
+            target_commitish: target_commitish.into(),
+            name: name.into(),
+            body: body.into(),
             draft,
             prerelease,
         }

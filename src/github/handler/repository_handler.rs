@@ -9,10 +9,7 @@ pub struct RepositoryHandler {
 }
 
 impl RepositoryHandler {
-    pub fn new<S>(owner: S, repo: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new(owner: impl Into<String>, repo: impl Into<String>) -> Self {
         RepositoryHandler {
             owner: owner.into(),
             repo: repo.into(),
@@ -20,22 +17,18 @@ impl RepositoryHandler {
     }
 
     pub fn releases(&self) -> ReleaseHandler {
-        ReleaseHandler::new(self.owner.to_owned(), self.repo.to_owned())
+        ReleaseHandler::new(&self.owner, &self.repo)
     }
 
     pub fn branches(&self) -> BranchesHandler {
-        BranchesHandler::new(self.owner.to_owned(), self.repo.to_owned())
+        BranchesHandler::new(&self.owner, &self.repo)
     }
 
-    pub fn branch(&self, branch: &str) -> BranchHandler {
-        BranchHandler::new(
-            self.owner.to_owned(),
-            self.repo.to_owned(),
-            branch.to_owned(),
-        )
+    pub fn branch(&self, branch: impl Into<String>) -> BranchHandler {
+        BranchHandler::new(&self.owner, &self.repo, branch)
     }
 
     pub fn pull_request(&self) -> PullRequestHandler {
-        PullRequestHandler::new(self.owner.to_owned(), self.repo.to_owned())
+        PullRequestHandler::new(&self.owner, &self.repo)
     }
 }

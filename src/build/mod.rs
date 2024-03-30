@@ -4,7 +4,7 @@ pub mod compression;
 pub mod os;
 pub mod prebuilt;
 
-use self::{compression::Compression, prebuilt::PreBuilt};
+use self::{compression::Compression, prebuilt::PreBuiltItems};
 use arch::Arch;
 use os::Os;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub struct Build {
     pub compression: Compression,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(flatten)]
-    pub prebuilt: Option<PreBuilt>,
+    pub prebuilt: Option<PreBuiltItems>,
 }
 
 impl Build {
@@ -49,10 +49,8 @@ impl Build {
 
 #[cfg(test)]
 mod tests {
-    use super::arch::Arch;
-    use super::compression::Compression;
-    use super::os::Os;
-    use super::*;
+    use super::{arch::Arch, compression::Compression, os::Os};
+    use crate::build::Build;
 
     #[test]
     fn should_validate_if_multi_target() {

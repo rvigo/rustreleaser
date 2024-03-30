@@ -1,9 +1,8 @@
 pub mod error_response;
 
+use self::error_response::ErrorResponse;
 use reqwest::Client;
 use std::ops::{Deref, DerefMut};
-
-use self::error_response::ErrorResponse;
 
 pub struct HttpClient {
     client: Client,

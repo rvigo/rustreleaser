@@ -1,32 +1,33 @@
-mod arch_os_matrix;
-pub mod asset;
+mod asset;
+mod asset_arch_os_matrix_entry;
 pub mod builder;
+pub mod dto;
 pub mod github_client;
-pub mod handler;
-pub mod macros;
-pub mod release;
-pub mod request;
-pub mod response;
+mod handler;
+mod macros;
+mod release;
+mod request;
+mod response;
 pub mod tag;
 
 use self::{
-    arch_os_matrix::ArchOsMatrixEntry, asset::UploadedAsset, builder::BuilderExecutor,
-    release::Release, tag::Tag,
+    asset::UploadedAsset, asset_arch_os_matrix_entry::AssetArchOsMatrixEntry,
+    builder::BuilderExecutor, release::Release, tag::Tag,
 };
 use crate::{
+    arch_os_matrix::ArchOsMatrix,
     brew::package::Package,
-    build::{arch::Arch, compression::Compression, os::Os, prebuilt::PreBuilt, Build},
+    build::{arch::Arch, compression::Compression, os::Os, prebuilt::PreBuiltItems, Build},
     checksum,
     config::ReleaseConfig,
     git,
-    github::{arch_os_matrix::PushArchOsMatrix, asset::Asset},
+    github::asset::Asset,
 };
 use anyhow::{bail, Result};
 use flate2::write::GzEncoder;
 use itertools::Itertools;
 use std::{
     fs::{self, File},
-    future::Future,
     io::Write,
     path::{Path, PathBuf},
     vec,
@@ -38,19 +39,19 @@ const SINGLE_TARGET_DIR: &str = "target/release";
 pub async fn release(build_info: &Build, release_info: &ReleaseConfig) -> Result<Vec<Package>> {
     let packages = if let Some(pb) = &build_info.prebuilt {
         log::debug!("Running prebuilt, ignoring build info");
-        prebuilt(pb, release_info.to_owned(), &build_info.compression).await?
+        prebuilt(pb, release_info, &build_info.compression).await?
     } else if build_info.is_multi_target() {
         log::debug!("Running multi target");
-        multi(build_info.to_owned(), release_info.to_owned()).await?
+        multi(build_info, release_info).await?
     } else {
         log::debug!("Running single target");
-        single(build_info.to_owned(), release_info.to_owned()).await?
+        single(build_info, release_info).await?
     };
 
     Ok(packages)
 }
 
-async fn single(build_info: Build, release_info: ReleaseConfig) -> Result<Vec<Package>> {
+async fn single(build_info: &Build, release_info: &ReleaseConfig) -> Result<Vec<Package>> {
     // validate binary
     check_binary(&build_info.binary.to_owned(), None)?;
 
@@ -89,10 +90,9 @@ async fn single(build_info: Build, release_info: ReleaseConfig) -> Result<Vec<Pa
     asset.add_checksum(checksum);
 
     // create release
-    log::debug!("creating release");
+    log::debug!("getting/creating release");
+    let release = get_release(release_info, &tag).await?;
 
-    let release = get_release(release_info, &tag, do_create_release, get_release_by_tag).await?;
-    log::info!("release: {:#?}", release);
     // upload to release
     log::debug!("uploading asset");
     let uploaded_assets = match release.upload_assets(vec![asset], &tag).await {
@@ -112,12 +112,12 @@ async fn single(build_info: Build, release_info: ReleaseConfig) -> Result<Vec<Pa
     Ok(packages)
 }
 
-async fn multi(build: Build, release_config: ReleaseConfig) -> Result<Vec<Package>> {
+async fn multi(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Package>> {
     let tag = git::get_current_tag()?;
 
-    let archs = build.arch.unwrap_or_default();
-    let os = build.os.unwrap_or_default();
-    let mut matrix: Vec<ArchOsMatrixEntry> = Vec::new();
+    let archs = build.arch.to_owned().unwrap_or_default();
+    let os = build.os.to_owned().unwrap_or_default();
+    let mut matrix: Vec<AssetArchOsMatrixEntry> = Vec::new();
 
     for arch in &archs {
         for os in &os {
@@ -128,12 +128,11 @@ async fn multi(build: Build, release_config: ReleaseConfig) -> Result<Vec<Packag
             )?;
 
             let mut entry =
-                ArchOsMatrixEntry::new(arch, os, binary, tag.value(), &build.compression);
+                AssetArchOsMatrixEntry::new(arch, os, binary, tag.value(), &build.compression);
 
             let target = format!("{}-{}", &arch.to_string(), &os.to_string());
 
             log::debug!("zipping binary for {}", target);
-
             let entry_name = entry.name.to_owned();
 
             // zip binary
@@ -144,7 +143,7 @@ async fn multi(build: Build, release_config: ReleaseConfig) -> Result<Vec<Packag
             )?;
 
             // create an asset
-            let mut asset = Asset::new(entry.name.to_owned(), PathBuf::from(&entry_name));
+            let mut asset = Asset::new(&entry.name, &entry_name);
 
             // generate a checksum value
             let checksum = generate_checksum(&asset)
@@ -158,7 +157,7 @@ async fn multi(build: Build, release_config: ReleaseConfig) -> Result<Vec<Packag
         }
     }
 
-    let release = get_release(release_config, &tag, do_create_release, get_release_by_tag).await?;
+    let release = get_release(release_config, &tag).await?;
 
     let assets: Vec<Asset> = matrix
         .iter()
@@ -185,26 +184,26 @@ async fn multi(build: Build, release_config: ReleaseConfig) -> Result<Vec<Packag
 }
 
 pub async fn prebuilt(
-    pre_built: &PreBuilt,
-    release_config: ReleaseConfig,
+    prebuilt_items: &PreBuiltItems,
+    release_config: &ReleaseConfig,
     compression: &Compression,
 ) -> Result<Vec<Package>> {
-    let mut matrix: Vec<ArchOsMatrixEntry> = Vec::new();
+    let mut matrix: Vec<AssetArchOsMatrixEntry> = Vec::new();
 
     let tag = git::get_current_tag()?;
-    for f in pre_built.iter() {
-        let path = f.path.to_owned();
+    for prebuilt in prebuilt_items.iter() {
+        let path = prebuilt.path.to_owned();
         if path.is_dir() {
             log::info!("path is a directory, ignoring");
             continue;
         }
         let name = path.file_name().unwrap().to_str().unwrap().to_owned();
-        let mut entry = ArchOsMatrixEntry::new(
-            &f.arch.as_ref().unwrap(),
-            &f.os.as_ref().unwrap(),
-            name.clone(),
+        let mut entry = AssetArchOsMatrixEntry::new(
+            prebuilt.arch.as_ref().unwrap(),
+            prebuilt.os.as_ref().unwrap(),
+            &name,
             tag.value(),
-            &compression,
+            compression,
         );
 
         zip_file(&name, &name, path.to_owned())?;
@@ -218,13 +217,7 @@ pub async fn prebuilt(
         entry.set_asset(asset);
         matrix.push_entry(entry);
     }
-    let release = get_release(
-        release_config.to_owned(),
-        &tag,
-        do_create_release,
-        get_release_by_tag,
-    )
-    .await?;
+    let release = get_release(release_config, &tag).await?;
 
     let assets: Vec<Asset> = matrix
         .iter()
@@ -300,7 +293,7 @@ fn check_binary(name: &str, target: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn do_create_release(release_config: ReleaseConfig, tag: &Tag) -> Result<Release> {
+async fn do_create_release(release_config: &ReleaseConfig, tag: &Tag) -> Result<Release> {
     github_client::instance()
         .repo(&release_config.owner, &release_config.repo)
         .releases()
@@ -310,12 +303,12 @@ async fn do_create_release(release_config: ReleaseConfig, tag: &Tag) -> Result<R
         .name(&release_config.name)
         .draft(release_config.draft)
         .prerelease(release_config.prerelease)
-        .body(release_config.body.unwrap_or_default())
+        .body(release_config.body.as_ref().unwrap_or(&String::new()))
         .execute()
         .await
 }
 
-async fn get_release_by_tag(release_config: ReleaseConfig, tag: &Tag) -> Result<Release> {
+async fn get_release_by_tag(release_config: &ReleaseConfig, tag: &Tag) -> Result<Release> {
     github_client::instance()
         .repo(&release_config.owner, &release_config.repo)
         .releases()
@@ -323,41 +316,27 @@ async fn get_release_by_tag(release_config: ReleaseConfig, tag: &Tag) -> Result<
         .await
 }
 
-async fn get_release<'tag, F, C, FO, CO>(
-    release_config: ReleaseConfig,
-    tag: &'tag Tag,
-    function: F,
-    callback: C,
-) -> Result<Release>
-where
-    F: FnOnce(ReleaseConfig, &'tag Tag) -> FO,
-    C: FnOnce(ReleaseConfig, &'tag Tag) -> CO,
-    FO: Future<Output = Result<Release>>,
-    CO: Future<Output = Result<Release>>,
-{
-    let res = function(release_config.to_owned(), tag).await;
+async fn get_release(release_config: &ReleaseConfig, tag: &Tag) -> Result<Release> {
+    let res = get_release_by_tag(release_config, tag).await;
     match res {
         Ok(release) => Ok(release),
         Err(err) => {
             log::warn!(
-                "cannot create a release, trying to get the release by tag: {:?}",
+                "cannot find a release by tag: {:?}, trying to create a new one",
                 err
             );
-            callback(release_config, tag).await
+
+            do_create_release(release_config, tag).await
         }
     }
 }
 
-fn create_asset<S, P>(name: S, path: P) -> Asset
-where
-    S: Into<String>,
-    P: AsRef<Path>,
-{
-    Asset::new(name.into(), path.as_ref().to_path_buf())
+fn create_asset(name: impl Into<String>, path: impl AsRef<Path>) -> Asset {
+    Asset::new(name, path)
 }
 
 fn generate_checksum(asset: &Asset) -> Result<String> {
-    let checksum = checksum::create(&asset.name, &asset.path)?;
+    let checksum = checksum::create(&asset.path)?;
     Ok(checksum)
 }
 

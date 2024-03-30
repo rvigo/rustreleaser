@@ -14,15 +14,15 @@ pub struct UpsertFileRequest {
 
 impl UpsertFileRequest {
     pub fn new(
-        message: String,
-        content: String,
+        message: impl Into<String>,
+        content: impl Into<String>,
         branch: Option<String>,
         sha: Option<String>,
         committer: CommitterRequest,
     ) -> Self {
         Self {
-            message,
-            content,
+            message: message.into(),
+            content: content.into(),
             branch,
             sha,
             committer,

@@ -14,10 +14,7 @@ pub struct Release {
 }
 
 impl Release {
-    pub fn new<S>(id: u64, owner: S, repo: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new(id: u64, owner: impl Into<String>, repo: impl Into<String>) -> Self {
         Release {
             id,
             owner: owner.into(),

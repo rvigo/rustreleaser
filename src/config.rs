@@ -13,7 +13,7 @@ const PR_DEFAULT_HEAD_BRANCH_NAME: &str = "bumps-formula-version";
 
 const DEFAULT_CONFIG_FILE_NAME: &str = "rustreleaser.yaml";
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub build: Build,
     pub brew: Option<BrewConfig>,
@@ -30,7 +30,7 @@ impl Config {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BrewConfig {
     pub name: String,
     #[serde(default)]
@@ -63,13 +63,13 @@ impl BrewConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CommitterConfig {
     pub email: String,
     pub name: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PullRequestConfig {
     pub title: Option<String>,
     pub body: Option<String>,
@@ -93,7 +93,7 @@ impl PullRequestConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ReleaseConfig {
     pub owner: String,
     pub repo: String,

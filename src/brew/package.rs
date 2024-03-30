@@ -12,18 +12,18 @@ pub struct Package {
 
 impl Package {
     pub fn new(
-        name: String,
+        name: impl Into<String>,
         os: Option<Os>,
         arch: Option<Arch>,
-        url: String,
-        sha256: String,
+        url: impl Into<String>,
+        sha256: impl Into<String>,
     ) -> Self {
         Self {
-            name,
+            name: name.into(),
             os,
             arch,
-            url,
-            sha256,
+            url: url.into(),
+            sha256: sha256.into(),
         }
     }
 }

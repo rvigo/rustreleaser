@@ -2,13 +2,8 @@ use anyhow::Result;
 use sha2::{Digest, Sha256};
 use std::{fs::File, io, path::Path};
 
-pub fn create<P>(binary_name: &str, path: P) -> Result<String>
-where
-    P: AsRef<Path>,
-{
+pub fn create(path: impl AsRef<Path>) -> Result<String> {
     let path = path.as_ref();
-    log::info!("creating checksum for: {}: {}", binary_name, path.display());
-
     let mut file = File::open(path)?;
 
     let mut hasher = Sha256::new();
@@ -34,7 +29,7 @@ mod tests {
         let mut file = File::create(&file_path)?;
         writeln!(file, "Hello, world!")?;
 
-        let checksum = create("test.txt", &file_path)?;
+        let checksum = create(&file_path)?;
 
         assert_eq!(
             checksum,
@@ -47,7 +42,7 @@ mod tests {
 
     #[test]
     fn should_return_err_with_nonexistent_file() {
-        let result = create("nonexistent.txt", "nonexistent.txt");
+        let result = create("nonexistent.txt");
 
         assert!(result.is_err());
     }

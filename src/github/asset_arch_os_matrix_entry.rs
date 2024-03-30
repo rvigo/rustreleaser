@@ -1,25 +1,28 @@
 use super::asset::Asset;
-use crate::build::{arch::Arch, compression::Compression, os::Os};
+use crate::{
+    arch_os_matrix::Entry,
+    build::{arch::Arch, compression::Compression, os::Os},
+};
 
 #[derive(Debug, Clone)]
-pub struct ArchOsMatrixEntry<'matrix> {
+pub struct AssetArchOsMatrixEntry<'matrix> {
     pub arch: &'matrix Arch,
     pub os: &'matrix Os,
     pub name: String,
     pub asset: Option<Asset>,
 }
 
-impl<'matrix> ArchOsMatrixEntry<'matrix> {
+impl<'matrix> AssetArchOsMatrixEntry<'matrix> {
     pub fn new(
         arch: &'matrix Arch,
         os: &'matrix Os,
-        name: String,
+        name: impl Into<String>,
         tag: &'matrix str,
         compression: &'matrix Compression,
     ) -> Self {
         let name = format!(
             "{}_{}_{}_{}.{}",
-            name,
+            name.into(),
             tag,
             arch.to_string(),
             os.to_string(),
@@ -38,12 +41,4 @@ impl<'matrix> ArchOsMatrixEntry<'matrix> {
     }
 }
 
-pub trait PushArchOsMatrix<'matrix> {
-    fn push_entry(&mut self, entry: ArchOsMatrixEntry<'matrix>);
-}
-
-impl<'matrix> PushArchOsMatrix<'matrix> for Vec<ArchOsMatrixEntry<'matrix>> {
-    fn push_entry(&mut self, entry: ArchOsMatrixEntry<'matrix>) {
-        self.push(entry);
-    }
-}
+impl Entry for AssetArchOsMatrixEntry<'_> {}

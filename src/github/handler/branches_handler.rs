@@ -6,10 +6,7 @@ pub struct BranchesHandler {
 }
 
 impl BranchesHandler {
-    pub fn new<S>(owner: S, repo: S) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn new(owner: impl Into<String>, repo: impl Into<String>) -> Self {
         BranchesHandler {
             owner: owner.into(),
             repo: repo.into(),
@@ -17,6 +14,6 @@ impl BranchesHandler {
     }
 
     pub fn create(&self) -> CreateBranchBuilder {
-        CreateBranchBuilder::new(self.owner.to_owned(), self.repo.to_owned())
+        CreateBranchBuilder::new(&self.owner, &self.repo)
     }
 }

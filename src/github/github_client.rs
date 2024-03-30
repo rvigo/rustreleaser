@@ -1,9 +1,12 @@
 use super::{
     asset::{Asset, UploadedAsset},
+    dto::{
+        commit_info_dto::CommitInfoDto, pull_request_dto::PullRequestDto, release_dto::ReleaseDto,
+    },
     handler::repository_handler::RepositoryHandler,
     request::{
         branch_ref_request::BranchRefRequest, create_release_request::CreateReleaseRequest,
-        pull_request_request::PullRquestRequest,
+        pull_request_request::PullRequestRequest,
     },
     response::{
         assignees_request::AssigneesRequest, labels_request::LabelsRequest,
@@ -12,7 +15,6 @@ use super::{
     tag::Tag,
 };
 use crate::{
-    build::committer::Committer,
     get,
     github::{release::Release, request::upsert_file_request::UpsertFileRequest},
     post, put, upload_file,
@@ -35,10 +37,7 @@ pub fn instance() -> &'static GithubClient {
 pub struct GithubClient;
 
 impl GithubClient {
-    pub fn repo<S>(&self, owner: S, name: S) -> RepositoryHandler
-    where
-        S: Into<String>,
-    {
+    pub fn repo(&self, owner: impl Into<String>, name: impl Into<String>) -> RepositoryHandler {
         RepositoryHandler::new(owner, name)
     }
 
@@ -78,10 +77,14 @@ impl GithubClient {
         Ok(uploaded_asset)
     }
 
-    pub(super) fn create_uploaded_asset(&self, asset: &Asset, url: String) -> UploadedAsset {
+    pub(super) fn create_uploaded_asset(
+        &self,
+        asset: &Asset,
+        url: impl Into<String>,
+    ) -> UploadedAsset {
         UploadedAsset::new(
             asset.name.to_owned(),
-            url,
+            url.into(),
             asset
                 .checksum
                 .as_ref()
@@ -136,9 +139,8 @@ impl GithubClient {
         repo: &str,
         path: &str,
         content: &str,
-        commit_message: String,
-        committer: Committer,
         head: String,
+        commit_info: CommitInfoDto,
     ) -> Result<()> {
         let content = BASE64_STANDARD.encode(content.as_bytes());
 
@@ -154,19 +156,24 @@ impl GithubClient {
         let body = if sha.sha.is_empty() {
             log::debug!("creating new file");
 
-            let request =
-                UpsertFileRequest::new(commit_message, content, Some(head), None, committer.into());
+            let request = UpsertFileRequest::new(
+                &commit_info.message,
+                content,
+                Some(head),
+                None,
+                commit_info.committer.to_owned().into(),
+            );
 
             serde_json::to_string(&request)?
         } else {
             log::debug!("updating file");
 
             let request = UpsertFileRequest::new(
-                commit_message,
+                &commit_info.message,
                 content,
                 Some(head),
                 Some(sha.sha),
-                committer.into(),
+                commit_info.committer.to_owned().into(),
             );
 
             serde_json::to_string(&request)?
@@ -184,22 +191,18 @@ impl GithubClient {
 
     pub(super) async fn create_pull_request(
         &self,
-        owner: &str,
-        repo: &str,
-        title: &str,
-        head: &str,
-        base: &str,
-        pr_body: &str,
-        assignees: Vec<String>,
-        labels: Vec<String>,
+        pull_request: PullRequestDto,
     ) -> Result<PullRequest> {
-        let uri = format!("https://api.github.com/repos/{}/{}/pulls", owner, repo);
+        let uri = format!(
+            "https://api.github.com/repos/{}/{}/pulls",
+            pull_request.owner, pull_request.repo
+        );
 
-        let request = PullRquestRequest::new(
-            title.to_owned(),
-            head.to_owned(),
-            base.to_owned(),
-            pr_body.to_owned(),
+        let request = PullRequestRequest::new(
+            pull_request.title,
+            pull_request.head,
+            pull_request.base,
+            pull_request.pr_body,
         );
         let body: String = serde_json::to_string(&request)?;
 
@@ -207,39 +210,42 @@ impl GithubClient {
 
         let pr: PullRequest = serde_json::from_str(&response)?;
 
-        if !assignees.is_empty() {
-            self.set_pr_assignees(owner, repo, pr.number, assignees)
-                .await?;
+        if !pull_request.assignees.is_empty() {
+            self.set_pr_assignees(
+                &pull_request.owner,
+                &pull_request.repo,
+                pr.number,
+                pull_request.assignees,
+            )
+            .await?;
         }
 
-        if !labels.is_empty() {
-            self.set_pr_labels(owner, repo, pr.number.to_string(), labels)
-                .await?;
+        if !pull_request.labels.is_empty() {
+            self.set_pr_labels(
+                &pull_request.owner,
+                &pull_request.repo,
+                pr.number.to_string(),
+                pull_request.labels,
+            )
+            .await?;
         }
 
         Ok(pr)
     }
 
-    pub(super) async fn create_release(
-        &self,
-        owner: &str,
-        repo: &str,
-        tag: &Tag,
-        target_branch: &str,
-        release_name: &str,
-        draft: bool,
-        prerelease: bool,
-        body: &str,
-    ) -> Result<Release> {
-        let uri = format!("https://api.github.com/repos/{}/{}/releases", owner, repo);
+    pub(super) async fn create_release(&self, release_dto: ReleaseDto) -> Result<Release> {
+        let uri = format!(
+            "https://api.github.com/repos/{}/{}/releases",
+            release_dto.owner, release_dto.repo
+        );
 
         let request = CreateReleaseRequest::new(
-            tag.value().to_owned(),
-            target_branch.to_owned(),
-            release_name.to_owned(),
-            body.to_owned(),
-            draft,
-            prerelease,
+            release_dto.tag.value(),
+            release_dto.target_branch,
+            release_dto.release_name,
+            release_dto.body,
+            release_dto.draft,
+            release_dto.prerelease,
         );
 
         let body: String = serde_json::to_string(&request)?;
@@ -248,7 +254,11 @@ impl GithubClient {
 
         let release = serde_json::from_str::<ReleaseResponse>(&response)?;
 
-        Ok(Release::new(release.id, owner, repo))
+        Ok(Release::new(
+            release.id,
+            release_dto.owner,
+            release_dto.repo,
+        ))
     }
 
     pub(super) async fn get_release_by_tag(
@@ -272,14 +282,16 @@ impl GithubClient {
 
     async fn set_pr_assignees(
         &self,
-        owner: &str,
-        repo: &str,
+        owner: impl Into<String>,
+        repo: impl Into<String>,
         pr_number: u64,
         assignees: Vec<String>,
     ) -> Result<()> {
         let uri = format!(
             "https://api.github.com/repos/{}/{}/issues/{}/assignees",
-            owner, repo, pr_number
+            owner.into(),
+            repo.into(),
+            pr_number
         );
 
         let request = AssigneesRequest::new(assignees);
@@ -293,14 +305,16 @@ impl GithubClient {
 
     async fn set_pr_labels(
         &self,
-        owner: &str,
-        repo: &str,
+        owner: impl Into<String>,
+        repo: impl Into<String>,
         pr_number: String,
         labels: Vec<String>,
     ) -> Result<()> {
         let uri = format!(
             "https://api.github.com/repos/{}/{}/issues/{}/labels",
-            owner, repo, pr_number
+            owner.into(),
+            repo.into(),
+            pr_number
         );
 
         let request = LabelsRequest::new(labels);

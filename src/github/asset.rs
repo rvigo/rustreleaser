@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct Asset {
@@ -8,16 +8,16 @@ pub struct Asset {
 }
 
 impl Asset {
-    pub fn new(name: String, path: PathBuf) -> Self {
+    pub fn new(name: impl Into<String>, path: impl AsRef<Path>) -> Self {
         Self {
-            name,
-            path,
+            name: name.into(),
+            path: path.as_ref().to_path_buf(),
             checksum: None,
         }
     }
 
-    pub fn add_checksum(&mut self, checksum: String) {
-        self.checksum = Some(checksum);
+    pub fn add_checksum(&mut self, checksum: impl Into<String>) {
+        self.checksum = Some(checksum.into());
     }
 }
 

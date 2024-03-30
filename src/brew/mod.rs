@@ -21,7 +21,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fs;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Brew {
     pub name: String,
     pub description: String,
@@ -62,11 +62,21 @@ impl Brew {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BrewArch {
     pub arch: Arch,
     pub url: String,
     pub hash: String,
+}
+
+impl BrewArch {
+    pub fn new(arch: Arch, url: impl Into<String>, hash: impl Into<String>) -> Self {
+        Self {
+            arch,
+            url: url.into(),
+            hash: hash.into(),
+        }
+    }
 }
 
 pub async fn release(
@@ -111,11 +121,8 @@ where
     Ok(rendered)
 }
 
-fn write_file<S>(file_name: String, data: S) -> Result<()>
-where
-    S: Into<String>,
-{
-    fs::write(file_name, data.into())?;
+fn write_file(file_name: impl Into<String>, data: impl Into<String>) -> Result<()> {
+    fs::write(file_name.into(), data.into())?;
     Ok(())
 }
 
@@ -184,10 +191,10 @@ impl From<Vec<Package>> for Targets {
         let targets: Vec<Target> = if value.is_empty() {
             vec![]
         } else if value[0].arch.is_none() && value[0].os.is_none() {
-            let target = vec![Target::Single(SingleTarget {
-                url: value[0].url.clone(),
-                hash: value[0].sha256.clone(),
-            })];
+            let target = vec![Target::Single(SingleTarget::new(
+                &value[0].url,
+                &value[0].sha256,
+            ))];
             target
         } else {
             let group = value
@@ -199,11 +206,7 @@ impl From<Vec<Package>> for Targets {
                     os: g.0.unwrap(),
                     archs: g
                         .1
-                        .map(|p| BrewArch {
-                            arch: p.arch.to_owned().unwrap(),
-                            url: p.url.clone(),
-                            hash: p.sha256.clone(),
-                        })
+                        .map(|p| BrewArch::new(p.arch.unwrap(), p.url, p.sha256))
                         .collect(),
                 })
                 .map(Target::Multi)
