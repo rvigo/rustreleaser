@@ -10,6 +10,7 @@ pub struct PullRequestDto {
 }
 
 impl PullRequestDto {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         owner: impl Into<String>,
         repo: impl Into<String>,
