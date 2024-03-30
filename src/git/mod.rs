@@ -1,8 +1,7 @@
+use crate::github::tag::Tag;
 use anyhow::{bail, Result};
 use git2::Repository;
 use itertools::Itertools;
-
-use crate::github::tag::Tag;
 
 pub fn get_current_tag() -> Result<Tag> {
     let repo = Repository::open(".")?;
@@ -21,21 +20,34 @@ pub fn get_current_tag() -> Result<Tag> {
 mod tests {
     use super::*;
     use git2::Repository;
-    use std::{fs, path::Path};
+    use std::{
+        fs::{self},
+        path::Path,
+        process::Command,
+    };
     use tempdir::TempDir;
+
+    fn init_gitconfig() {
+        let _ = Command::new("git")
+            .args(&["config", "--global", "user.name", "Test User"])
+            .output()
+            .expect("Failed to set user name for test");
+
+        let _ = Command::new("git")
+            .args(&["config", "--global", "user.email", "test@example.com"])
+            .output()
+            .expect("Failed to set email for test");
+    }
 
     #[test]
     fn test_get_current_tag() -> Result<(), Box<dyn std::error::Error>> {
-        // Create a temporary directory.
         let dir = TempDir::new("git")?;
+        init_gitconfig();
 
-        // Initialize a new repository in the temporary directory.
         let repo = Repository::init(dir.path())?;
 
-        // Create a new file in the repository.
         fs::write(dir.path().join("test.txt"), "Hello, world!")?;
 
-        // Stage and commit the new file.
         let mut index = repo.index()?;
         index.add_path(Path::new("test.txt"))?;
         let oid = index.write_tree()?;
@@ -49,7 +61,6 @@ mod tests {
             &[],
         )?;
 
-        // Create a new tag in the repository.
         let obj = &repo.revparse_single("HEAD")?;
         repo.tag("v1.0.0", obj, &signature, "Version 1.0.0", false)?;
 
@@ -71,16 +82,12 @@ mod tests {
         let obj = &repo.revparse_single("HEAD")?;
         repo.tag("v2.0.0", obj, &signature, "Version 2.0.0", false)?;
 
-        // Change the current directory to the repository directory.
         std::env::set_current_dir(dir.path())?;
 
-        // Get the current tag.
         let tag = get_current_tag()?;
 
-        // The tag should be "v1.0.0".
         assert_eq!(tag.value(), "v2.0.0");
 
-        // Delete the temporary directory.
         dir.close()?;
 
         Ok(())
@@ -88,22 +95,17 @@ mod tests {
 
     #[test]
     fn test_get_current_tag_no_tags() -> Result<(), Box<dyn std::error::Error>> {
-        // Create a temporary directory.
         let dir = TempDir::new("git")?;
+        init_gitconfig();
 
-        // Initialize a new repository in the temporary directory.
         Repository::init(dir.path())?;
 
-        // Change the current directory to the repository directory.
         std::env::set_current_dir(dir.path())?;
 
-        // Try to get the current tag.
         let result = get_current_tag();
 
-        // The function should return an error because there are no tags.
         assert!(result.is_err());
 
-        // Delete the temporary directory.
         dir.close()?;
 
         Ok(())
