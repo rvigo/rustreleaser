@@ -18,8 +18,10 @@ pub fn get_current_tag() -> Result<Tag> {
 
 pub fn remove_extra_header() -> Result<()> {
     let mut config = Config::open_default()?;
-    config.remove("http.https://github.com/.extraheader")?;
-    log::debug!("Extra header removed");
+    match config.remove("http.https://github.com/.extraheader") {
+        Ok(_) => log::debug!("Extra header removed"),
+        Err(e) => log::warn!("Failed to remove extra header: {}", e),
+    }
     Ok(())
 }
 
