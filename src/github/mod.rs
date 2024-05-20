@@ -208,7 +208,6 @@ pub async fn prebuilt(
         );
 
         log::debug!("zipping binary for {:#?}", name);
-
         zip_file(&name, &name, path.to_owned())?;
 
         log::debug!("creating asset for {:#?}", name);
@@ -268,6 +267,12 @@ pub async fn prebuilt(
 }
 
 fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> Result<()> {
+    log::debug!(
+        "zipping file: {} - {} at {}",
+        binary_name,
+        full_binary_name,
+        binary_path.display()
+    );
     let mut file = File::open(binary_path)?;
     let mut archive = Builder::new(Vec::new());
 
