@@ -4,7 +4,7 @@ pub mod compression;
 pub mod os;
 pub mod prebuilt;
 
-use self::{compression::Compression, prebuilt::PreBuiltItems};
+use self::{compression::Compression, prebuilt::PreBuiltAsset};
 use arch::Arch;
 use os::Os;
 use serde::{Deserialize, Serialize};
@@ -17,8 +17,7 @@ pub struct Build {
     #[serde(default)]
     pub compression: Compression,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(flatten)]
-    pub prebuilt: Option<PreBuiltItems>,
+    pub prebuilt: Option<Vec<PreBuiltAsset>>,
 }
 
 impl Build {

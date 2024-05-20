@@ -17,7 +17,7 @@ use self::{
 use crate::{
     arch_os_matrix::ArchOsMatrix,
     brew::package::Package,
-    build::{arch::Arch, compression::Compression, os::Os, prebuilt::PreBuiltItems, Build},
+    build::{arch::Arch, compression::Compression, os::Os, prebuilt::PreBuiltAsset, Build},
     checksum,
     config::ReleaseConfig,
     git,
@@ -184,7 +184,7 @@ async fn multi(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Pack
 }
 
 pub async fn prebuilt(
-    prebuilt_items: &PreBuiltItems,
+    prebuilt_items: &Vec<PreBuiltAsset>,
     release_config: &ReleaseConfig,
     compression: &Compression,
 ) -> Result<Vec<Package>> {
@@ -198,6 +198,7 @@ pub async fn prebuilt(
             continue;
         }
         let name = path.file_name().unwrap().to_str().unwrap().to_owned();
+        log::debug!("creating matrix entry for {:#?}", name);
         let mut entry = AssetArchOsMatrixEntry::new(
             prebuilt.arch.as_ref().unwrap(),
             prebuilt.os.as_ref().unwrap(),
@@ -206,10 +207,14 @@ pub async fn prebuilt(
             compression,
         );
 
+        log::debug!("zipping binary for {:#?}", name);
+
         zip_file(&name, &name, path.to_owned())?;
 
-        let mut asset = create_asset(name, path);
+        log::debug!("creating asset for {:#?}", name);
+        let mut asset = create_asset(&name, path);
 
+        log::debug!("generating checksum for {:#?}", name);
         let checksum = generate_checksum(&asset)
             .unwrap_or_else(|_| panic!("Failed to generate checksum for asset {:#?}", asset));
 
