@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Targets(pub Vec<Target>);
 
+impl Targets {
+    pub fn inner_type(&self) -> &Target {
+        self.0.first().unwrap()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MultiTarget {
     pub os: Os,

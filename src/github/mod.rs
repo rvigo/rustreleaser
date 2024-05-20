@@ -184,7 +184,7 @@ async fn multi(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Pack
 }
 
 pub async fn prebuilt(
-    prebuilt_items: &Vec<PreBuiltAsset>,
+    prebuilt_items: &[PreBuiltAsset],
     release_config: &ReleaseConfig,
     compression: &Compression,
 ) -> Result<Vec<Package>> {

@@ -1,6 +1,7 @@
-use crate::build::Build;
+use crate::brew::target::{Target, Targets};
 use anyhow::Result;
 use handlebars::{handlebars_helper, Handlebars};
+use serde::{Deserialize, Serialize};
 
 pub fn handlebars<'hb>() -> Result<Handlebars<'hb>> {
     let mut hb = Handlebars::new();
@@ -18,6 +19,7 @@ pub fn handlebars<'hb>() -> Result<Handlebars<'hb>> {
     Ok(hb)
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Template {
     MultiTarget,
     SingleTarget,
@@ -32,11 +34,11 @@ impl ToString for Template {
     }
 }
 
-impl From<Build> for Template {
-    fn from(build: Build) -> Self {
-        match build.is_multi_target() {
-            true => Template::MultiTarget,
-            false => Template::SingleTarget,
+impl From<&Targets> for Template {
+    fn from(target: &Targets) -> Self {
+        match target.inner_type() {
+            Target::Single(_) => Template::SingleTarget,
+            Target::Multi(_) => Template::MultiTarget,
         }
     }
 }

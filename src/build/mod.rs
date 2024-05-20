@@ -22,14 +22,12 @@ pub struct Build {
 
 impl Build {
     pub fn is_multi_target(&self) -> bool {
-        self.is_multi_arch() || self.is_multi_os()
+        self.is_multi_arch() || self.is_multi_os() || self.is_prebuilt_multitarget()
     }
 
     pub fn is_multi_arch(&self) -> bool {
         if let Some(archs) = &self.arch {
             !archs.is_empty()
-                || self.prebuilt.is_some()
-                || self.prebuilt.as_ref().unwrap().len() > 1
         } else {
             false
         }
@@ -37,14 +35,23 @@ impl Build {
 
     pub fn is_multi_os(&self) -> bool {
         if let Some(oss) = &self.os {
-            !oss.is_empty() || self.prebuilt.is_some() || self.prebuilt.as_ref().unwrap().len() > 1
+            !oss.is_empty()
         } else {
             false
         }
     }
 
     pub fn has_prebuilt(&self) -> bool {
-        self.prebuilt.is_some()
+        self.prebuilt.is_some() && !self.prebuilt.as_ref().unwrap().is_empty()
+    }
+
+    pub fn is_prebuilt_multitarget(&self) -> bool {
+        log::debug!("has prebuilt? {}", self.has_prebuilt());
+        log::debug!(
+            "prebuilt len > 1? {}",
+            self.prebuilt.as_ref().unwrap().len() > 1
+        );
+        self.has_prebuilt() && self.prebuilt.as_ref().unwrap().len() > 1
     }
 }
 

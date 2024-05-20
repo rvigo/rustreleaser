@@ -25,7 +25,7 @@ class {{ name }} < Formula
             hash "{{ hash }}"
 
             def install
-                "{{ ../../install_info }}"
+                {{{ ../../install_info }}}
             end
         end
         {{ /if }}
@@ -35,7 +35,7 @@ class {{ name }} < Formula
             hash "{{ hash }}"
 
             def install
-                "{{ ../../install_info }}"
+                {{{ ../../install_info }}}
             end
         end
         {{ /if }}
@@ -51,7 +51,7 @@ class {{ name }} < Formula
             hash "{{ hash }}"
 
             def install
-                "{{ ../../install_info }}"
+                {{{ ../../install_info }}}
             end
         end
         {{ /if }}
@@ -61,7 +61,7 @@ class {{ name }} < Formula
             hash "{{ hash }}"
 
             def install
-                "{{ ../../install_info }}"
+                {{ ../../install_info }}
             end
         {{ /if }}
     {{ /each }}
@@ -71,13 +71,13 @@ class {{ name }} < Formula
     {{ #if caveats}}
 
     def caveats
-        "{{ caveats }}"
+        "{{{ caveats }}}"
     end
     {{ /if }}
     {{ #if test }}
 
     test do
-        {{ test }}
+        {{{ test }}}
     end
     {{ /if }}
 end

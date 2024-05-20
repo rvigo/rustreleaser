@@ -120,4 +120,55 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_handle_different_formats() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = TempDir::new("git")?;
+        init_gitconfig();
+
+        let repo = Repository::init(dir.path())?;
+
+        fs::write(dir.path().join("test.txt"), "Hello, world!")?;
+
+        let mut index = repo.index()?;
+        index.add_path(Path::new("test.txt"))?;
+        let oid = index.write_tree()?;
+        let signature = repo.signature()?;
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "Initial commit",
+            &repo.find_tree(oid)?,
+            &[],
+        )?;
+
+        let obj = &repo.revparse_single("HEAD")?;
+        repo.tag("v1.0.1", obj, &signature, "Version 1.0.1", false)?;
+
+        println!("creating commit 2");
+
+        let oid = index.write_tree()?;
+        let parent_commit = repo.head()?.peel_to_commit()?;
+
+        repo.commit(
+            Some("HEAD"),
+            &signature,
+            &signature,
+            "commit",
+            &repo.find_tree(oid)?,
+            &[&parent_commit],
+        )?;
+
+        println!("creating tag 2");
+        let obj = &repo.revparse_single("HEAD")?;
+        repo.tag("v1.0.11", obj, &signature, "Version 1.0.11", false)?;
+
+        std::env::set_current_dir(dir.path())?;
+
+        let tag = get_current_tag()?;
+        assert_eq!(tag.value(), "v1.0.11");
+
+        Ok(())
+    }
 }

@@ -39,10 +39,13 @@ pub struct Brew {
     pub tag: Tag,
     pub pull_request: Option<PullRequestConfig>,
     pub targets: Targets,
+    pub template: Template,
 }
 
 impl Brew {
     pub fn new(brew: BrewConfig, version: Tag, packages: Vec<Package>) -> Brew {
+        let targets = Targets::from(packages);
+        let template = Template::from(&targets);
         Brew {
             name: captalize(brew.name),
             description: brew.description,
@@ -50,7 +53,7 @@ impl Brew {
             install_info: brew.install,
             repository: brew.repository,
             tag: version,
-            targets: Targets::from(packages),
+            targets,
             license: brew.license,
             head: brew.head,
             test: brew.test,
@@ -58,6 +61,7 @@ impl Brew {
             commit_message: brew.commit_message,
             commit_author: brew.commit_author,
             pull_request: brew.pull_request,
+            template,
         }
     }
 }
@@ -79,19 +83,14 @@ impl BrewArch {
     }
 }
 
-pub async fn release(
-    brew_config: BrewConfig,
-    packages: Vec<Package>,
-    template: Template,
-) -> Result<String> {
-    log::debug!("template: {:?}", template.to_string());
+pub async fn release(brew_config: BrewConfig, packages: Vec<Package>) -> Result<String> {
     log::debug!("packages: {:?}", packages);
 
     let brew = Brew::new(brew_config, git::get_current_tag()?, packages);
     log::debug!("targets: {:?}", brew.targets);
-    log::debug!("Rendering Formula template {}", template.to_string());
+    log::debug!("Rendering Formula template {}", brew.template.to_string());
 
-    let data = serialize_brew(&brew, template)?;
+    let data = serialize(&brew)?;
 
     write_file(format!("{}.rb", brew.name.to_lowercase()), &data)?;
 
@@ -115,12 +114,9 @@ pub async fn release(
     Ok(data)
 }
 
-fn serialize_brew<T>(data: &T, template: Template) -> Result<String>
-where
-    T: Serialize,
-{
+fn serialize(brew: &Brew) -> Result<String> {
     let hb = handlebars()?;
-    let rendered = hb.render(&template.to_string(), data)?;
+    let rendered = hb.render(&brew.template.to_string(), brew)?;
     Ok(rendered)
 }
 
@@ -193,30 +189,7 @@ impl From<Vec<Package>> for Targets {
     fn from(value: Vec<Package>) -> Targets {
         let targets: Vec<Target> = if value.is_empty() {
             vec![]
-        } else if value.len() == 1 && value[0].prebuilt {
-            let target = vec![Target::Single(SingleTarget::new(
-                &value[0].url,
-                &value[0].sha256,
-            ))];
-            target
-        } else if value.len() > 1 && value.iter().all(|p| p.prebuilt) {
-            let group = value
-                .iter()
-                .cloned()
-                .group_by(|p| p.os.to_owned())
-                .into_iter()
-                .map(|g| MultiTarget {
-                    os: g.0.unwrap(),
-                    archs: g
-                        .1
-                        .map(|p| BrewArch::new(p.arch.unwrap(), p.url, p.sha256))
-                        .collect(),
-                })
-                .map(Target::Multi)
-                .collect();
-
-            group
-        } else if value[0].arch.is_none() && value[0].os.is_none() {
+        } else if value.len() == 1 {
             let target = vec![Target::Single(SingleTarget::new(
                 &value[0].url,
                 &value[0].sha256,
