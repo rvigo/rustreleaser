@@ -1,6 +1,6 @@
 use crate::github::tag::Tag;
 use anyhow::{bail, Result};
-use git2::Repository;
+use git2::{Config, Repository};
 use itertools::Itertools;
 
 pub fn get_current_tag() -> Result<Tag> {
@@ -14,6 +14,13 @@ pub fn get_current_tag() -> Result<Tag> {
     };
 
     Ok(Tag::new(tag))
+}
+
+pub fn remove_extra_header() -> Result<()> {
+    let mut config = Config::open_default()?;
+    config.remove("http.https://github.com/.extraheader")?;
+    log::debug!("Extra header removed");
+    Ok(())
 }
 
 #[cfg(test)]
@@ -37,6 +44,16 @@ mod tests {
             .args(&["config", "--global", "user.email", "test@example.com"])
             .output()
             .expect("Failed to set email for test");
+
+        let _ = Command::new("git")
+            .args(&[
+                "config",
+                "--global",
+                "http.https://github.com/.extraheader",
+                "AUTHORIZATION: basic ***",
+            ])
+            .output()
+            .expect("Failed to set extraheader for test");
     }
 
     #[test]
@@ -107,6 +124,46 @@ mod tests {
         assert!(result.is_err());
 
         dir.close()?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_remove_extra_header() -> Result<(), Box<dyn std::error::Error>> {
+        let dir = TempDir::new("git")?;
+        init_gitconfig();
+
+        Repository::init(dir.path())?;
+
+        std::env::set_current_dir(dir.path())?;
+
+        let config = Config::open_default()?;
+
+        let e = config.entries(None)?;
+
+        let _ = e.for_each(|entry| {
+            let key = entry.name().unwrap();
+            let value = entry.value().unwrap();
+
+            println!("before: {}: {}", key, value)
+        });
+
+        remove_extra_header()?;
+
+        let config = Config::open_default()?;
+
+        let e = config.entries(None)?;
+
+        let _ = e.for_each(|entry| {
+            let key = entry.name().unwrap();
+            let value = entry.value().unwrap();
+
+            println!("after: {}: {}", key, value)
+        });
+
+        let res = config.get_entry("http.");
+
+        assert!(res.is_err());
 
         Ok(())
     }

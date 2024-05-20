@@ -131,6 +131,7 @@ fn captalize(mut string: String) -> String {
 }
 
 async fn push_formula(brew: Brew) -> Result<()> {
+
     let pull_request = brew.pull_request.unwrap();
 
     let committer: Committer = brew.commit_author.map(Committer::from).unwrap_or_default();

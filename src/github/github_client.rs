@@ -15,7 +15,7 @@ use super::{
     tag::Tag,
 };
 use crate::{
-    get,
+    get, git,
     github::{release::Release, request::upsert_file_request::UpsertFileRequest},
     post, put, upload_file,
 };
@@ -142,6 +142,8 @@ impl GithubClient {
         head: String,
         commit_info: CommitInfoDto,
     ) -> Result<()> {
+        log::debug!("Upserting file");
+        git::remove_extra_header()?;
         let content = BASE64_STANDARD.encode(content.as_bytes());
 
         let uri = &format!(
@@ -193,6 +195,7 @@ impl GithubClient {
         &self,
         pull_request: PullRequestDto,
     ) -> Result<PullRequest> {
+        log::debug!("Creating pull request");
         let uri = format!(
             "https://api.github.com/repos/{}/{}/pulls",
             pull_request.owner, pull_request.repo

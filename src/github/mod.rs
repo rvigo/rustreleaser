@@ -329,7 +329,10 @@ async fn get_release_by_tag(release_config: &ReleaseConfig, tag: &Tag) -> Result
 async fn get_release(release_config: &ReleaseConfig, tag: &Tag) -> Result<Release> {
     let res = get_release_by_tag(release_config, tag).await;
     match res {
-        Ok(release) => Ok(release),
+        Ok(release) => {
+            log::info!("found release by tag: {:?}", tag);
+            Ok(release)
+        }
         Err(err) => {
             log::warn!(
                 "cannot find a release by tag: {:?}, trying to create a new one",
