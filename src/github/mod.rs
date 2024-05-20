@@ -221,6 +221,7 @@ pub async fn prebuilt(
         entry.set_asset(asset);
         matrix.push_entry(entry);
     }
+
     let release = get_release(release_config, &tag).await?;
 
     let assets: Vec<Asset> = matrix
