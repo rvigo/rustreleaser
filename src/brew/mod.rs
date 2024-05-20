@@ -84,8 +84,11 @@ pub async fn release(
     packages: Vec<Package>,
     template: Template,
 ) -> Result<String> {
-    let brew = Brew::new(brew_config, git::get_current_tag()?, packages);
+    log::debug!("template: {:?}", template.to_string());
+    log::debug!("packages: {:?}", packages);
 
+    let brew = Brew::new(brew_config, git::get_current_tag()?, packages);
+    log::debug!("targets: {:?}", brew.targets);
     log::debug!("Rendering Formula template {}", template.to_string());
 
     let data = serialize_brew(&brew, template)?;
@@ -131,7 +134,6 @@ fn captalize(mut string: String) -> String {
 }
 
 async fn push_formula(brew: Brew) -> Result<()> {
-
     let pull_request = brew.pull_request.unwrap();
 
     let committer: Committer = brew.commit_author.map(Committer::from).unwrap_or_default();
@@ -191,6 +193,29 @@ impl From<Vec<Package>> for Targets {
     fn from(value: Vec<Package>) -> Targets {
         let targets: Vec<Target> = if value.is_empty() {
             vec![]
+        } else if value.len() == 1 && value[0].prebuilt {
+            let target = vec![Target::Single(SingleTarget::new(
+                &value[0].url,
+                &value[0].sha256,
+            ))];
+            target
+        } else if value.len() > 1 && value.iter().all(|p| p.prebuilt) {
+            let group = value
+                .iter()
+                .cloned()
+                .group_by(|p| p.os.to_owned())
+                .into_iter()
+                .map(|g| MultiTarget {
+                    os: g.0.unwrap(),
+                    archs: g
+                        .1
+                        .map(|p| BrewArch::new(p.arch.unwrap(), p.url, p.sha256))
+                        .collect(),
+                })
+                .map(Target::Multi)
+                .collect();
+
+            group
         } else if value[0].arch.is_none() && value[0].os.is_none() {
             let target = vec![Target::Single(SingleTarget::new(
                 &value[0].url,

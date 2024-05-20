@@ -106,7 +106,7 @@ async fn single(build_info: &Build, release_info: &ReleaseConfig) -> Result<Vec<
     // return a package with the asset url and checksum value
     let packages: Vec<Package> = uploaded_assets
         .iter()
-        .map(|asset| package_asset(asset, None, None))
+        .map(|asset| package_asset(asset, None, None, false))
         .collect();
 
     Ok(packages)
@@ -176,7 +176,7 @@ async fn multi(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Pack
                 .find(|asset| asset.name == entry.name)
                 .expect("asset not found");
 
-            package_asset(asset, Some(entry.os), Some(entry.arch))
+            package_asset(asset, Some(entry.os), Some(entry.arch), false)
         })
         .collect();
 
@@ -260,7 +260,7 @@ pub async fn prebuilt(
                 .find(|asset| asset.name == entry.asset.as_ref().expect("asset not present").name)
                 .expect("asset not found");
 
-            package_asset(asset, Some(entry.os), Some(entry.arch))
+            package_asset(asset, Some(entry.os), Some(entry.arch), true)
         })
         .collect();
 
@@ -371,12 +371,18 @@ fn generate_checksum_asset(asset: &Asset) -> Result<Asset> {
     }
 }
 
-fn package_asset(asset: &UploadedAsset, os: Option<&Os>, arch: Option<&Arch>) -> Package {
+fn package_asset(
+    asset: &UploadedAsset,
+    os: Option<&Os>,
+    arch: Option<&Arch>,
+    prebuilt: bool,
+) -> Package {
     Package::new(
         asset.name.to_owned(),
         os.map(|os| os.to_owned()),
         arch.map(|arch| arch.to_owned()),
         asset.url.to_owned(),
         asset.checksum.to_owned(),
+        prebuilt,
     )
 }

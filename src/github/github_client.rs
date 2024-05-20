@@ -15,7 +15,7 @@ use super::{
     tag::Tag,
 };
 use crate::{
-    get, git,
+    get,
     github::{release::Release, request::upsert_file_request::UpsertFileRequest},
     post, put, upload_file,
 };
@@ -143,7 +143,6 @@ impl GithubClient {
         commit_info: CommitInfoDto,
     ) -> Result<()> {
         log::debug!("Upserting file");
-        git::remove_extra_header()?;
         let content = BASE64_STANDARD.encode(content.as_bytes());
 
         let uri = &format!(
@@ -237,7 +236,6 @@ impl GithubClient {
     }
 
     pub(super) async fn create_release(&self, release_dto: ReleaseDto) -> Result<Release> {
-        git::remove_extra_header()?;
         let uri = format!(
             "https://api.github.com/repos/{}/{}/releases",
             release_dto.owner, release_dto.repo
@@ -271,7 +269,6 @@ impl GithubClient {
         repo: &str,
         tag: &Tag,
     ) -> Result<Release> {
-        git::remove_extra_header()?;
         let uri = format!(
             "https://api.github.com/repos/{}/{}/releases/tags/{}",
             owner,

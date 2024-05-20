@@ -28,6 +28,8 @@ impl Build {
     pub fn is_multi_arch(&self) -> bool {
         if let Some(archs) = &self.arch {
             !archs.is_empty()
+                || self.prebuilt.is_some()
+                || self.prebuilt.as_ref().unwrap().len() > 1
         } else {
             false
         }
@@ -35,7 +37,7 @@ impl Build {
 
     pub fn is_multi_os(&self) -> bool {
         if let Some(oss) = &self.os {
-            !oss.is_empty()
+            !oss.is_empty() || self.prebuilt.is_some() || self.prebuilt.as_ref().unwrap().len() > 1
         } else {
             false
         }

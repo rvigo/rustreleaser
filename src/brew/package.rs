@@ -8,6 +8,7 @@ pub struct Package {
     pub arch: Option<Arch>,
     pub url: String,
     pub sha256: String,
+    pub prebuilt: bool,
 }
 
 impl Package {
@@ -17,6 +18,7 @@ impl Package {
         arch: Option<Arch>,
         url: impl Into<String>,
         sha256: impl Into<String>,
+        prebuilt: bool,
     ) -> Self {
         Self {
             name: name.into(),
@@ -24,6 +26,7 @@ impl Package {
             arch,
             url: url.into(),
             sha256: sha256.into(),
+            prebuilt,
         }
     }
 }
