@@ -208,12 +208,18 @@ pub async fn prebuilt(
         );
 
         log::debug!("zipping binary for {:#?}", name);
-        zip_file(&name, &name, path.to_owned())?;
+        let full_name = format!(
+            "{}-{}-{}",
+            name,
+            entry.arch.to_string(),
+            entry.os.to_string()
+        );
+        zip_file(&name, &full_name, path.to_owned())?;
 
         log::debug!("creating asset for {:#?}", name);
-        let mut asset = create_asset(&name, path);
+        let mut asset = create_asset(&full_name, path);
 
-        log::debug!("generating checksum for {:#?}", name);
+        log::debug!("generating checksum for {:#?}", full_name);
         let checksum = generate_checksum(&asset)
             .unwrap_or_else(|_| panic!("Failed to generate checksum for asset {:#?}", asset));
 
@@ -229,7 +235,6 @@ pub async fn prebuilt(
         .cloned()
         .filter_map(|entry| entry.asset)
         .collect();
-    // upload to release
     log::debug!("uploading asset");
 
     let uploaded_assets = match release.upload_assets(assets, &tag).await {
