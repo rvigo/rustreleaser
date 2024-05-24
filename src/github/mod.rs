@@ -24,7 +24,7 @@ use crate::{
     github::asset::Asset,
 };
 use anyhow::{bail, Result};
-use flate2::write::GzEncoder;
+use flate2::GzBuilder;
 use itertools::Itertools;
 use std::{
     fs::{self, File},
@@ -132,7 +132,6 @@ async fn multi(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Pack
 
             let target = format!("{}-{}", &arch.to_string(), &os.to_string());
 
-            log::debug!("zipping binary for {}", target);
             let entry_name = entry.name.to_owned();
 
             // zip binary
@@ -282,10 +281,13 @@ fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> 
     let mut file = File::open(binary_path)?;
     let mut archive = Builder::new(Vec::new());
 
-    archive.append_file(binary_name, &mut file)?;
+    archive.append_file(full_binary_name, &mut file)?;
 
     let compressed_file = File::create(full_binary_name)?;
-    let mut encoder = GzEncoder::new(compressed_file, flate2::Compression::Default);
+    let mut encoder = GzBuilder::new()
+        .filename(binary_name)
+        .write(compressed_file, flate2::Compression::Default);
+
     encoder.write_all(&archive.into_inner()?)?;
 
     encoder.try_finish()?;
