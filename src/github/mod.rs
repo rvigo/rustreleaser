@@ -217,7 +217,7 @@ pub async fn prebuilt(
             zip_file(&name, &full_name, path.to_owned()).context("Failed to zip file")?;
 
         log::debug!("creating asset for {:#?}", name);
-        let mut asset = create_asset(&full_name, zip_file_path);
+        let mut asset = create_asset(format!("{}.tar.gz", full_name), zip_file_path);
 
         log::debug!("asset created: {:?}", asset);
 
