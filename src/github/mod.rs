@@ -275,17 +275,19 @@ pub async fn prebuilt(
 }
 
 fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> Result<PathBuf> {
+    let zip_file_name = format!("{}.tar.gz", full_binary_name);
     log::debug!(
-        "zipping file: {} - {} at {}",
+        "zipping file: {} - {} at {}. Result: {}",
         binary_name,
         full_binary_name,
-        binary_path.display()
+        binary_path.display(),
+        zip_file_name
     );
+
     let mut file = File::open(binary_path)?;
     let mut archive = Builder::new(Vec::new());
 
-    archive.append_file(full_binary_name, &mut file)?;
-    let zip_file_name = format!("{}.tar.gz", full_binary_name);
+    archive.append_file(binary_name, &mut file)?;
     let compressed_file = File::create(&zip_file_name)?;
     let mut encoder = GzBuilder::new()
         .filename(binary_name)
