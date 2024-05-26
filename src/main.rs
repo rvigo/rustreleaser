@@ -25,8 +25,8 @@ async fn main() -> Result<()> {
     let build_info = config.build;
     let release_info = config.release;
 
-    log::info!("Building");
     if !build_info.has_prebuilt() {
+        log::info!("Building");
         cargo::build(&build_info).await?;
     }
 
