@@ -23,7 +23,7 @@ use crate::{
     git,
     github::asset::Asset,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use flate2::GzBuilder;
 use itertools::Itertools;
 use std::{
@@ -213,10 +213,13 @@ pub async fn prebuilt(
             entry.arch.to_string(),
             entry.os.to_string()
         );
-        zip_file(&name, &full_name, path.to_owned())?;
+        let zip_file_path =
+            zip_file(&name, &full_name, path.to_owned()).context("Failed to zip file")?;
 
         log::debug!("creating asset for {:#?}", name);
-        let mut asset = create_asset(&full_name, path);
+        let mut asset = create_asset(&full_name, zip_file_path);
+
+        log::debug!("asset created: {:?}", asset);
 
         log::debug!("generating checksum for {:#?}", full_name);
         let checksum = generate_checksum(&asset)
@@ -271,7 +274,7 @@ pub async fn prebuilt(
     Ok(packages)
 }
 
-fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> Result<()> {
+fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> Result<PathBuf> {
     log::debug!(
         "zipping file: {} - {} at {}",
         binary_name,
@@ -282,8 +285,8 @@ fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> 
     let mut archive = Builder::new(Vec::new());
 
     archive.append_file(full_binary_name, &mut file)?;
-
-    let compressed_file = File::create(full_binary_name)?;
+    let zip_file_name = format!("{}.tar.gz", full_binary_name);
+    let compressed_file = File::create(&zip_file_name)?;
     let mut encoder = GzBuilder::new()
         .filename(binary_name)
         .write(compressed_file, flate2::Compression::Default);
@@ -292,7 +295,7 @@ fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> 
 
     encoder.try_finish()?;
 
-    Ok(())
+    Ok(PathBuf::from(zip_file_name))
 }
 
 fn check_binary(name: &str, target: Option<String>) -> Result<()> {
