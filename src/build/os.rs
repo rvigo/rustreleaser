@@ -21,8 +21,8 @@ impl From<String> for Os {
 impl ToString for Os {
     fn to_string(&self) -> String {
         match self {
-            Os::AppleDarwin => "apple-darwin".to_string(),
-            Os::UnknownLinuxGnu => "unknown-linux-gnu".to_string(),
+            Os::AppleDarwin => "apple".to_string(),
+            Os::UnknownLinuxGnu => "linux".to_string(),
         }
     }
 }

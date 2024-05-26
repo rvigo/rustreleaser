@@ -102,6 +102,6 @@ pub struct ReleaseConfig {
     pub prerelease: bool,
     #[serde(default)]
     pub draft: bool,
-    pub name: String,
+    pub name: Option<String>,
     pub body: Option<String>,
 }

@@ -1,4 +1,4 @@
-mod asset;
+pub mod asset;
 mod asset_arch_os_matrix_entry;
 pub mod builder;
 pub mod dto;
@@ -18,76 +18,74 @@ use crate::{
     arch_os_matrix::ArchOsMatrix,
     brew::package::Package,
     build::{arch::Arch, compression::Compression, os::Os, prebuilt::PreBuiltAsset, Build},
-    checksum,
+    checksum::Checksum,
+    compress::compress_file,
     config::ReleaseConfig,
     git,
     github::asset::Asset,
 };
-use anyhow::{bail, Context, Result};
-use flate2::GzBuilder;
-use itertools::Itertools;
+use anyhow::{bail, Result};
 use std::{
-    fs::{self, File},
-    io::Write,
+    fs,
     path::{Path, PathBuf},
     vec,
 };
-use tar::Builder;
 
 const SINGLE_TARGET_DIR: &str = "target/release";
 
-pub async fn release(build_info: &Build, release_info: &ReleaseConfig) -> Result<Vec<Package>> {
-    let packages = if let Some(pb) = &build_info.prebuilt {
+pub async fn release(build: &Build, release_info: &ReleaseConfig) -> Result<Vec<Package>> {
+    let packages = if let Some(pb) = &build.prebuilt {
         log::debug!("Running prebuilt, ignoring build info");
-        prebuilt(pb, release_info, &build_info.compression).await?
-    } else if build_info.is_multi_target() {
+        prebuilt(pb, release_info, &build.compression).await?
+    } else if build.is_multi_target() {
         log::debug!("Running multi target");
-        multi(build_info, release_info).await?
+        multi(build, release_info).await?
     } else {
         log::debug!("Running single target");
-        single(build_info, release_info).await?
+        single(build, release_info).await?
     };
 
     Ok(packages)
 }
 
-async fn single(build_info: &Build, release_info: &ReleaseConfig) -> Result<Vec<Package>> {
+async fn single(build: &Build, release_info: &ReleaseConfig) -> Result<Vec<Package>> {
     // validate binary
-    check_binary(&build_info.binary.to_owned(), None)?;
+    check_binary(&build.binary.to_owned(), None)?;
 
     let tag = git::get_current_tag()?;
 
     // calculate full binary name
     let binary_name = format!(
         "{}_{}.{}",
-        build_info.binary,
+        build.binary,
         tag.value(),
-        build_info.compression.extension()
+        build.compression.extension()
     );
 
     log::debug!("binary name: {}", binary_name);
 
     // zip binary
     log::debug!("zipping binary");
-    zip_file(
-        &build_info.binary.to_owned(),
+    compress_file(
+        &build.binary.to_owned(),
+        PathBuf::from(format!("{}/{}", SINGLE_TARGET_DIR, build.binary)),
         &binary_name.to_owned(),
-        PathBuf::from(format!("{}/{}", SINGLE_TARGET_DIR, build_info.binary)),
+        &build.compression,
     )?;
 
     let path = PathBuf::from(binary_name.to_owned());
 
     // create an asset
     log::debug!("creating asset");
-    let mut asset = create_asset(binary_name, path);
+    let mut asset = create_compressed_asset(binary_name, path, &build.compression);
 
     // generate a checksum value
     log::debug!("generating checksum");
-    let checksum = generate_checksum(&asset)?;
+    let checksum = Checksum::try_from(&asset)?;
 
     // add checksum to asset
     log::debug!("adding checksum to asset");
-    asset.add_checksum(checksum);
+    asset.add_checksum(checksum.value());
 
     // create release
     log::debug!("getting/creating release");
@@ -135,22 +133,20 @@ async fn multi(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Pack
             let entry_name = entry.name.to_owned();
 
             // zip binary
-            zip_file(
+            let zip_file_path = compress_file(
                 &build.binary.to_owned(),
-                &entry_name,
                 PathBuf::from(format!("target/{}/release/{}", target, build.binary)),
+                &entry_name,
+                &build.compression,
             )?;
 
             // create an asset
-            let mut asset = Asset::new(&entry.name, &entry_name);
-
-            // generate a checksum value
-            let checksum = generate_checksum(&asset)
+            let mut asset = create_compressed_asset(&entry.name, zip_file_path, &build.compression);
+            let checksum = Checksum::try_from(&asset)
                 .unwrap_or_else(|_| panic!("Failed to generate checksum for asset {:#?}", asset));
 
             // add checksum to asset
-            asset.add_checksum(checksum);
-
+            asset.add_checksum(checksum.value());
             entry.set_asset(asset);
             matrix.push_entry(entry);
         }
@@ -208,24 +204,24 @@ pub async fn prebuilt(
 
         log::debug!("zipping binary for {:#?}", name);
         let full_name = format!(
-            "{}-{}-{}",
+            "{}-{}-{}-{}",
             name,
+            tag.value(),
             entry.arch.to_string(),
             entry.os.to_string()
         );
-        let zip_file_path =
-            zip_file(&name, &full_name, path.to_owned()).context("Failed to zip file")?;
+        let zip_file_path = compress_file(&name, path, &full_name, compression)?;
 
-        log::debug!("creating asset for {:#?}", name);
-        let mut asset = create_asset(format!("{}.tar.gz", full_name), zip_file_path);
+        log::debug!("creating asset for {:#?}", full_name);
+        let mut asset = create_compressed_asset(&full_name, zip_file_path, compression);
 
         log::debug!("asset created: {:?}", asset);
 
         log::debug!("generating checksum for {:#?}", full_name);
-        let checksum = generate_checksum(&asset)
+        let checksum = Checksum::try_from(&asset)
             .unwrap_or_else(|_| panic!("Failed to generate checksum for asset {:#?}", asset));
 
-        asset.add_checksum(checksum);
+        asset.add_checksum(checksum.value());
         entry.set_asset(asset);
         matrix.push_entry(entry);
     }
@@ -247,18 +243,6 @@ pub async fn prebuilt(
         }
     };
 
-    println!(
-        "{:#?}",
-        uploaded_assets
-            .iter()
-            .map(|u| u.name.to_owned())
-            .collect_vec()
-    );
-    println!(
-        "{:#?}",
-        matrix.iter().map(|m| m.name.to_owned()).collect_vec()
-    );
-
     let packages: Vec<Package> = matrix
         .into_iter()
         .map(|entry| {
@@ -272,32 +256,6 @@ pub async fn prebuilt(
         .collect();
 
     Ok(packages)
-}
-
-fn zip_file(binary_name: &str, full_binary_name: &str, binary_path: PathBuf) -> Result<PathBuf> {
-    let zip_file_name = format!("{}.tar.gz", full_binary_name);
-    log::debug!(
-        "zipping file: {} - {} at {}. Result: {}",
-        binary_name,
-        full_binary_name,
-        binary_path.display(),
-        zip_file_name
-    );
-
-    let mut file = File::open(binary_path)?;
-    let mut archive = Builder::new(Vec::new());
-
-    archive.append_file(binary_name, &mut file)?;
-    let compressed_file = File::create(&zip_file_name)?;
-    let mut encoder = GzBuilder::new()
-        .filename(binary_name)
-        .write(compressed_file, flate2::Compression::Default);
-
-    encoder.write_all(&archive.into_inner()?)?;
-
-    encoder.try_finish()?;
-
-    Ok(PathBuf::from(zip_file_name))
 }
 
 fn check_binary(name: &str, target: Option<String>) -> Result<()> {
@@ -323,7 +281,12 @@ async fn do_create_release(release_config: &ReleaseConfig, tag: &Tag) -> Result<
         .create()
         .tag(tag)
         .target_branch(&release_config.target_branch)
-        .name(&release_config.name)
+        .name(
+            release_config
+                .name
+                .as_ref()
+                .unwrap_or(&tag.value().to_owned()),
+        )
         .draft(release_config.draft)
         .prerelease(release_config.prerelease)
         .body(release_config.body.as_ref().unwrap_or(&String::new()))
@@ -357,13 +320,12 @@ async fn get_release(release_config: &ReleaseConfig, tag: &Tag) -> Result<Releas
     }
 }
 
-fn create_asset(name: impl Into<String>, path: impl AsRef<Path>) -> Asset {
-    Asset::new(name, path)
-}
-
-fn generate_checksum(asset: &Asset) -> Result<String> {
-    let checksum = checksum::create(&asset.path)?;
-    Ok(checksum)
+fn create_compressed_asset(
+    name: impl Into<String>,
+    path: impl AsRef<Path>,
+    compression: &Compression,
+) -> Asset {
+    Asset::new(format!("{}.{}", name.into(), compression.extension()), path)
 }
 
 fn generate_checksum_asset(asset: &Asset) -> Result<Asset> {
@@ -373,7 +335,7 @@ fn generate_checksum_asset(asset: &Asset) -> Result<Asset> {
         let path = PathBuf::from(&sha256_file_name);
         fs::write(&path, format!("{}  {}", checksum, asset.name))?;
 
-        let asset = create_asset(&sha256_file_name, path);
+        let asset = Asset::new(&sha256_file_name, path);
         Ok(asset)
     } else {
         bail!(anyhow::anyhow!(

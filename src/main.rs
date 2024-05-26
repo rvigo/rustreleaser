@@ -3,6 +3,7 @@ mod brew;
 mod build;
 mod cargo;
 mod checksum;
+mod compress;
 mod config;
 mod git;
 mod github;
