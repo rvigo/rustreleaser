@@ -1,6 +1,7 @@
-use super::{asset::UploadedAsset, generate_checksum_asset, tag::Tag};
+use super::{asset::UploadedAsset, generate_checksum_asset};
 use crate::{
     brew::package::Package,
+    git::tag::Tag,
     github::{asset::Asset, github_client},
 };
 use anyhow::{bail, Result};

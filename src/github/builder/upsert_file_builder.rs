@@ -1,6 +1,6 @@
 use super::BuilderExecutor;
 use crate::{
-    build::committer::Committer,
+    git::committer::Committer,
     github::{dto::commit_info_dto::CommitInfoDto, github_client},
 };
 

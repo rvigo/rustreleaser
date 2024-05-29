@@ -1,5 +1,8 @@
 use super::BuilderExecutor;
-use crate::github::{dto::release_dto::ReleaseDto, github_client, release::Release, tag::Tag};
+use crate::{
+    git::tag::Tag,
+    github::{dto::release_dto::ReleaseDto, github_client, release::Release},
+};
 use anyhow::Result;
 
 pub struct CreateReleaseBuilder {

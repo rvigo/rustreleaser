@@ -1,51 +1,33 @@
-use std::cmp::Ordering;
+pub mod committer;
+pub mod tag;
 
-use crate::github::tag::Tag;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use git2::Repository;
-use itertools::Itertools;
+use semver::Version;
+use tag::Tag;
 
 pub fn get_current_tag() -> Result<Tag> {
-    let repo = Repository::open(".")?;
+    let repo = Repository::open(".").context("Cannot read repo info")?;
+    let tags = repo.tag_names(None)?;
 
-    let binding = repo.tag_names(None)?;
+    let mut tags = tags
+        .iter()
+        .map(|tag| Tag::new(tag.unwrap_or_default()))
+        .filter_map(|tag| {
+            Version::parse(tag.strip_v_prefix())
+                .ok()
+                .map(|version| (tag, version))
+        })
+        .collect::<Vec<_>>();
+    tags.sort_by(|(_, a), (_, b)| a.cmp(b));
+    let sorted = tags.into_iter().map(|(tag, _)| tag).collect::<Vec<Tag>>();
 
-    let ordered = binding.into_iter().sorted_by(|a, b| {
-        let a = a.as_ref().unwrap().trim_start_matches('v');
-        let b = b.as_ref().unwrap().trim_start_matches('v');
-
-        let mut a_parts = a.split(|c| c == '.' || c == '-');
-        let mut b_parts = b.split(|c| c == '.' || c == '-');
-
-        loop {
-            match (a_parts.next(), b_parts.next()) {
-                (Some(a_part), Some(b_part)) => {
-                    match (a_part.parse::<u32>(), b_part.parse::<u32>()) {
-                        (Ok(a_num), Ok(b_num)) => match a_num.cmp(&b_num) {
-                            Ordering::Equal => continue,
-                            non_eq => return non_eq,
-                        },
-                        (Ok(_), Err(_)) => return Ordering::Less,
-                        (Err(_), Ok(_)) => return Ordering::Greater,
-                        (Err(_), Err(_)) => match a_part.cmp(b_part) {
-                            Ordering::Equal => continue,
-                            non_eq => return non_eq,
-                        },
-                    }
-                }
-                (Some(_), None) => return Ordering::Greater,
-                (None, Some(_)) => return Ordering::Less,
-                (None, None) => return Ordering::Equal,
-            }
-        }
-    });
-
-    let tag = match ordered.last().unwrap_or_default() {
+    let tag = match sorted.last() {
         Some(tag) => tag,
         None => bail!(anyhow::anyhow!("No tags found")),
     };
 
-    Ok(Tag::new(tag))
+    Ok(tag.to_owned())
 }
 
 #[cfg(test)]
@@ -128,7 +110,7 @@ mod tests {
 
         let tag = get_current_tag()?;
 
-        assert_eq!(tag.value(), "v2.0.0");
+        assert_eq!(tag.name(), "v2.0.0");
 
         dir.close()?;
 
@@ -215,7 +197,7 @@ mod tests {
         std::env::set_current_dir(dir.path())?;
 
         let tag = get_current_tag()?;
-        assert_eq!(tag.value(), "v1.1.10-beta");
+        assert_eq!(tag.name(), "v1.1.10-beta");
 
         Ok(())
     }

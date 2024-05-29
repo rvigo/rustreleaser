@@ -1,7 +1,4 @@
-use crate::{
-    brew::{install::Install, repository::Repository},
-    build::Build,
-};
+use crate::{brew::repository::Repository, build::Build, compression::Compression};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -37,7 +34,7 @@ pub struct BrewConfig {
     pub description: String,
     #[serde(default)]
     pub homepage: String,
-    pub install: Install,
+    pub install: String,
     #[serde(default)]
     pub license: String,
     #[serde(default = "BrewConfig::main_branch_name")]
@@ -97,11 +94,22 @@ impl PullRequestConfig {
 pub struct ReleaseConfig {
     pub owner: String,
     pub repo: String,
+    #[serde(default = "ReleaseConfig::target_branch")]
     pub target_branch: String,
     #[serde(default)]
     pub prerelease: bool,
     #[serde(default)]
     pub draft: bool,
     pub name: Option<String>,
-    pub body: Option<String>,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub compression: Compression,
+    pub archive: Option<Vec<String>>,
+}
+
+impl ReleaseConfig {
+    pub fn target_branch() -> String {
+        MAIN_BRANCH_NAME.to_owned()
+    }
 }

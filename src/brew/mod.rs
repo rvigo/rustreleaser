@@ -1,25 +1,28 @@
-pub mod install;
 pub mod package;
 pub mod repository;
 pub mod target;
+mod template;
 
 use self::{
-    install::Install,
     package::Package,
     repository::Repository,
     target::{MultiTarget, SingleTarget, Target, Targets},
 };
 use crate::{
-    build::{arch::Arch, committer::Committer},
+    brew::template::handlebars,
+    git::{committer::Committer, tag::Tag},
+};
+use crate::{
+    build::arch::Arch,
     config::{BrewConfig, CommitterConfig, PullRequestConfig},
     git,
-    github::{builder::BuilderExecutor, github_client, tag::Tag},
-    template::{handlebars, Template},
+    github::{builder::BuilderExecutor, github_client},
 };
 use anyhow::{Context, Result};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use template::Template;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Brew {
@@ -32,7 +35,7 @@ pub struct Brew {
     pub caveats: String,
     pub commit_message: String,
     pub commit_author: Option<CommitterConfig>,
-    pub install_info: Install,
+    pub install_info: String,
     pub repository: Repository,
     #[serde(flatten)]
     #[serde(rename(serialize = "version"))]
@@ -83,11 +86,10 @@ impl BrewArch {
     }
 }
 
-pub async fn release(brew_config: BrewConfig, packages: Vec<Package>) -> Result<String> {
+pub async fn publish(brew_config: BrewConfig, packages: Vec<Package>) -> Result<String> {
     log::debug!("packages: {:?}", packages);
 
     let brew = Brew::new(brew_config, git::get_current_tag()?, packages);
-    log::debug!("targets: {:?}", brew.targets);
     log::debug!("Rendering Formula template {}", brew.template.to_string());
 
     let data = serialize(&brew)?;
@@ -132,7 +134,7 @@ fn captalize(mut string: String) -> String {
 async fn push_formula(brew: Brew) -> Result<()> {
     let pull_request = brew.pull_request.unwrap();
 
-    let committer: Committer = brew.commit_author.map(Committer::from).unwrap_or_default();
+    let committer = brew.commit_author.map(Committer::from).unwrap_or_default();
 
     let repo_handler =
         github_client::instance().repo(&brew.repository.owner, &brew.repository.name);

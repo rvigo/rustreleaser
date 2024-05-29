@@ -1,5 +1,8 @@
-use crate::{arch_os_matrix::ArchOsMatrixEntry, build::Build};
+mod arch_os_matrix;
+
+use crate::build::{Build, TargetType};
 use anyhow::{bail, Result};
+use arch_os_matrix::ArchOsMatrixEntry;
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
@@ -11,15 +14,18 @@ const DEFAULT_CARGO_FILE_NAME: &str = "Cargo.toml";
 const DEFAULT_CARGO_BIN_NAME: &str = "cargo";
 const DEFAULT_RUSTUP_BIN_NAME: &str = "rustup";
 
-// TODO add multi target
 pub async fn build(build: &Build) -> Result<()> {
     check_cargo()?;
     check_cargo_project()?;
-    if build.is_multi_target() {
-        build_multi(Vec::from(build.to_owned())).await?;
-    } else {
-        build_single().await?;
+    match build.target_type() {
+        TargetType::Multi => {
+            build_multi(Vec::from(build.to_owned())).await?;
+        }
+        _ => {
+            build_single().await?;
+        }
     };
+
     Ok(())
 }
 

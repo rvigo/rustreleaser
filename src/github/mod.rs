@@ -1,259 +1,47 @@
 pub mod asset;
-mod asset_arch_os_matrix_entry;
+mod asset_arch_os_matrix;
 pub mod builder;
-pub mod dto;
+mod dto;
 pub mod github_client;
 mod handler;
 mod macros;
+mod multi;
+mod prebuilt;
 mod release;
 mod request;
 mod response;
-pub mod tag;
+mod single;
 
-use self::{
-    asset::UploadedAsset, asset_arch_os_matrix_entry::AssetArchOsMatrixEntry,
-    builder::BuilderExecutor, release::Release, tag::Tag,
-};
+use self::release::Release;
 use crate::{
-    arch_os_matrix::ArchOsMatrix,
-    brew::package::Package,
-    build::{arch::Arch, compression::Compression, os::Os, prebuilt::PreBuiltAsset, Build},
-    checksum::Checksum,
-    compress::compress_file,
-    config::ReleaseConfig,
-    git,
-    github::asset::Asset,
+    brew::package::Package, build::Build, compression::Compression, config::ReleaseConfig,
+    git::tag::Tag, github::asset::Asset,
 };
 use anyhow::{bail, Result};
+use asset_arch_os_matrix::AssetArchOsMatrix;
+use builder::BuilderExecutor;
 use std::{
     fs,
     path::{Path, PathBuf},
-    vec,
 };
 
 const SINGLE_TARGET_DIR: &str = "target/release";
 
-pub async fn release(build: &Build, release_info: &ReleaseConfig) -> Result<Vec<Package>> {
-    let packages = if let Some(pb) = &build.prebuilt {
-        log::debug!("Running prebuilt, ignoring build info");
-        prebuilt(pb, release_info, &build.compression).await?
-    } else if build.is_multi_target() {
-        log::debug!("Running multi target");
-        multi(build, release_info).await?
-    } else {
-        log::debug!("Running single target");
-        single(build, release_info).await?
-    };
-
-    Ok(packages)
-}
-
-async fn single(build: &Build, release_info: &ReleaseConfig) -> Result<Vec<Package>> {
-    // validate binary
-    check_binary(&build.binary.to_owned(), None)?;
-
-    let tag = git::get_current_tag()?;
-
-    // calculate full binary name
-    let binary_name = format!(
-        "{}_{}.{}",
-        build.binary,
-        tag.value(),
-        build.compression.extension()
-    );
-
-    log::debug!("binary name: {}", binary_name);
-
-    // zip binary
-    log::debug!("zipping binary");
-    compress_file(
-        &build.binary.to_owned(),
-        PathBuf::from(format!("{}/{}", SINGLE_TARGET_DIR, build.binary)),
-        &binary_name.to_owned(),
-        &build.compression,
-    )?;
-
-    let path = PathBuf::from(binary_name.to_owned());
-
-    // create an asset
-    log::debug!("creating asset");
-    let mut asset = create_compressed_asset(binary_name, path, &build.compression);
-
-    // generate a checksum value
-    log::debug!("generating checksum");
-    let checksum = Checksum::try_from(&asset)?;
-
-    // add checksum to asset
-    log::debug!("adding checksum to asset");
-    asset.add_checksum(checksum.value());
-
-    // create release
-    log::debug!("getting/creating release");
-    let release = get_release(release_info, &tag).await?;
-
-    // upload to release
-    log::debug!("uploading asset");
-    let uploaded_assets = match release.upload_assets(vec![asset], &tag).await {
-        Ok(uploaded_assets) => uploaded_assets,
-        Err(e) => {
-            log::error!("Failed to upload asset {:#?}", e);
-            bail!(anyhow::anyhow!("Failed to upload asset"))
+pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Package>> {
+    let packages = match build.target_type() {
+        crate::build::TargetType::Multi => {
+            log::debug!("Running multi target");
+            multi::release(build, release_config).await?
+        }
+        crate::build::TargetType::Single => {
+            log::debug!("Running single target");
+            single::release(build, release_config).await?
+        }
+        crate::build::TargetType::PreBuilt => {
+            log::debug!("Running prebuilt, ignoring build info");
+            prebuilt::release(build, release_config, &release_config.compression).await?
         }
     };
-
-    // return a package with the asset url and checksum value
-    let packages: Vec<Package> = uploaded_assets
-        .iter()
-        .map(|asset| package_asset(asset, None, None, false))
-        .collect();
-
-    Ok(packages)
-}
-
-async fn multi(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Package>> {
-    let tag = git::get_current_tag()?;
-
-    let archs = build.arch.to_owned().unwrap_or_default();
-    let os = build.os.to_owned().unwrap_or_default();
-    let mut matrix: Vec<AssetArchOsMatrixEntry> = Vec::new();
-
-    for arch in &archs {
-        for os in &os {
-            let binary = build.binary.to_owned();
-            check_binary(
-                &binary,
-                Some(format!("{}-{}", &arch.to_string(), &os.to_string())),
-            )?;
-
-            let mut entry =
-                AssetArchOsMatrixEntry::new(arch, os, binary, tag.value(), &build.compression);
-
-            let target = format!("{}-{}", &arch.to_string(), &os.to_string());
-
-            let entry_name = entry.name.to_owned();
-
-            // zip binary
-            let zip_file_path = compress_file(
-                &build.binary.to_owned(),
-                PathBuf::from(format!("target/{}/release/{}", target, build.binary)),
-                &entry_name,
-                &build.compression,
-            )?;
-
-            // create an asset
-            let mut asset = create_compressed_asset(&entry.name, zip_file_path, &build.compression);
-            let checksum = Checksum::try_from(&asset)
-                .unwrap_or_else(|_| panic!("Failed to generate checksum for asset {:#?}", asset));
-
-            // add checksum to asset
-            asset.add_checksum(checksum.value());
-            entry.set_asset(asset);
-            matrix.push_entry(entry);
-        }
-    }
-
-    let release = get_release(release_config, &tag).await?;
-
-    let assets: Vec<Asset> = matrix
-        .iter()
-        .cloned()
-        .filter_map(|entry| entry.asset)
-        .collect();
-
-    // upload to release
-    let uploaded_assets = release.upload_assets(assets, &tag).await?;
-
-    let packages: Vec<Package> = matrix
-        .into_iter()
-        .map(|entry| {
-            let asset = uploaded_assets
-                .iter()
-                .find(|asset| asset.name == entry.name)
-                .expect("asset not found");
-
-            package_asset(asset, Some(entry.os), Some(entry.arch), false)
-        })
-        .collect();
-
-    Ok(packages)
-}
-
-pub async fn prebuilt(
-    prebuilt_items: &[PreBuiltAsset],
-    release_config: &ReleaseConfig,
-    compression: &Compression,
-) -> Result<Vec<Package>> {
-    let mut matrix: Vec<AssetArchOsMatrixEntry> = Vec::new();
-
-    let tag = git::get_current_tag()?;
-    for prebuilt in prebuilt_items.iter() {
-        let path = prebuilt.path.to_owned();
-        if path.is_dir() {
-            log::info!("path is a directory, ignoring");
-            continue;
-        }
-        let name = path.file_name().unwrap().to_str().unwrap().to_owned();
-        log::debug!("creating matrix entry for {:#?}", name);
-        let mut entry = AssetArchOsMatrixEntry::new(
-            prebuilt.arch.as_ref().unwrap(),
-            prebuilt.os.as_ref().unwrap(),
-            &name,
-            tag.value(),
-            compression,
-        );
-
-        log::debug!("zipping binary for {:#?}", name);
-        let full_name = format!(
-            "{}-{}-{}-{}",
-            name,
-            tag.value(),
-            entry.arch.to_string(),
-            entry.os.to_string()
-        );
-        let zip_file_path = compress_file(&name, path, &full_name, compression)?;
-
-        log::debug!("creating asset for {:#?}", full_name);
-        let mut asset = create_compressed_asset(&full_name, zip_file_path, compression);
-
-        log::debug!("asset created: {:?}", asset);
-
-        log::debug!("generating checksum for {:#?}", full_name);
-        let checksum = Checksum::try_from(&asset)
-            .unwrap_or_else(|_| panic!("Failed to generate checksum for asset {:#?}", asset));
-
-        asset.add_checksum(checksum.value());
-        entry.set_asset(asset);
-        matrix.push_entry(entry);
-    }
-
-    let release = get_release(release_config, &tag).await?;
-
-    let assets: Vec<Asset> = matrix
-        .iter()
-        .cloned()
-        .filter_map(|entry| entry.asset)
-        .collect();
-    log::debug!("uploading asset");
-
-    let uploaded_assets = match release.upload_assets(assets, &tag).await {
-        Ok(uploaded_assets) => uploaded_assets,
-        Err(e) => {
-            log::error!("Failed to upload asset {:#?}", e);
-            bail!(anyhow::anyhow!("Failed to upload asset"))
-        }
-    };
-
-    let packages: Vec<Package> = matrix
-        .into_iter()
-        .map(|entry| {
-            let asset = uploaded_assets
-                .iter()
-                .find(|asset| asset.name == entry.asset.as_ref().expect("asset not present").name)
-                .expect("asset not found");
-
-            package_asset(asset, Some(entry.os), Some(entry.arch), true)
-        })
-        .collect();
 
     Ok(packages)
 }
@@ -285,11 +73,11 @@ async fn do_create_release(release_config: &ReleaseConfig, tag: &Tag) -> Result<
             release_config
                 .name
                 .as_ref()
-                .unwrap_or(&tag.value().to_owned()),
+                .unwrap_or(&tag.name().to_owned()),
         )
         .draft(release_config.draft)
         .prerelease(release_config.prerelease)
-        .body(release_config.body.as_ref().unwrap_or(&String::new()))
+        .body(&release_config.body)
         .execute()
         .await
 }
@@ -345,18 +133,24 @@ fn generate_checksum_asset(asset: &Asset) -> Result<Asset> {
     }
 }
 
-fn package_asset(
-    asset: &UploadedAsset,
-    os: Option<&Os>,
-    arch: Option<&Arch>,
-    prebuilt: bool,
-) -> Package {
-    Package::new(
-        asset.name.to_owned(),
-        os.map(|os| os.to_owned()),
-        arch.map(|arch| arch.to_owned()),
-        asset.url.to_owned(),
-        asset.checksum.to_owned(),
-        prebuilt,
-    )
+type Assets = Vec<Asset>;
+
+impl From<&AssetArchOsMatrix<'_>> for Assets {
+    fn from(value: &AssetArchOsMatrix) -> Self {
+        value
+            .iter()
+            .cloned()
+            .filter_map(|entry| entry.asset)
+            .collect()
+    }
+}
+
+impl From<AssetArchOsMatrix<'_>> for Assets {
+    fn from(value: AssetArchOsMatrix) -> Self {
+        value
+            .iter()
+            .cloned()
+            .filter_map(|entry| entry.asset)
+            .collect()
+    }
 }

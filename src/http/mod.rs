@@ -1,6 +1,7 @@
 pub mod error_response;
 
 use self::error_response::ErrorResponse;
+use anyhow::Result;
 use reqwest::Client;
 use std::ops::{Deref, DerefMut};
 
@@ -31,11 +32,11 @@ impl DerefMut for HttpClient {
 }
 
 pub trait ResponseHandler {
-    async fn handle(self) -> anyhow::Result<String, ErrorResponse>;
+    async fn handle(self) -> Result<String, ErrorResponse>;
 }
 
 impl ResponseHandler for Result<reqwest::Response, reqwest::Error> {
-    async fn handle(self) -> anyhow::Result<String, ErrorResponse> {
+    async fn handle(self) -> Result<String, ErrorResponse> {
         match self {
             Ok(response) => {
                 let status = response.status();
@@ -52,6 +53,7 @@ impl ResponseHandler for Result<reqwest::Response, reqwest::Error> {
                     Ok(message)
                 }
             }
+
             Err(error) => Err(ErrorResponse::internal_server_error(
                 if error.to_string().is_empty() {
                     None

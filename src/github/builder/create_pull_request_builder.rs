@@ -1,6 +1,6 @@
 use super::BuilderExecutor;
 use crate::{
-    build::committer::Committer,
+    git::committer::Committer,
     github::{
         dto::pull_request_dto::PullRequestDto, github_client,
         response::pull_request_response::PullRequest,

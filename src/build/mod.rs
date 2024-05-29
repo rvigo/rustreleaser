@@ -1,10 +1,8 @@
 pub mod arch;
-pub mod committer;
-pub mod compression;
 pub mod os;
 pub mod prebuilt;
 
-use self::{compression::Compression, prebuilt::PreBuiltAsset};
+use self::prebuilt::PreBuiltAsset;
 use arch::Arch;
 use os::Os;
 use serde::{Deserialize, Serialize};
@@ -14,18 +12,33 @@ pub struct Build {
     pub arch: Option<Vec<Arch>>,
     pub os: Option<Vec<Os>>,
     pub binary: String,
-    #[serde(default)]
-    pub compression: Compression,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prebuilt: Option<Vec<PreBuiltAsset>>,
 }
 
+#[derive(PartialEq, PartialOrd)]
+pub enum TargetType {
+    Multi,
+    Single,
+    PreBuilt,
+}
+
 impl Build {
-    pub fn is_multi_target(&self) -> bool {
-        self.is_multi_arch() || self.is_multi_os() || self.is_prebuilt_multitarget()
+    pub fn target_type(&self) -> TargetType {
+        if self.has_prebuilt() {
+            TargetType::PreBuilt
+        } else if self.is_multi_target() {
+            TargetType::Multi
+        } else {
+            TargetType::Single
+        }
     }
 
-    pub fn is_multi_arch(&self) -> bool {
+    fn is_multi_target(&self) -> bool {
+        self.is_multi_arch() || self.is_multi_os()
+    }
+
+    fn is_multi_arch(&self) -> bool {
         if let Some(archs) = &self.arch {
             !archs.is_empty()
         } else {
@@ -33,7 +46,7 @@ impl Build {
         }
     }
 
-    pub fn is_multi_os(&self) -> bool {
+    fn is_multi_os(&self) -> bool {
         if let Some(oss) = &self.os {
             !oss.is_empty()
         } else {
@@ -41,30 +54,20 @@ impl Build {
         }
     }
 
-    pub fn has_prebuilt(&self) -> bool {
+    fn has_prebuilt(&self) -> bool {
         self.prebuilt.is_some() && !self.prebuilt.as_ref().unwrap().is_empty()
-    }
-
-    pub fn is_prebuilt_multitarget(&self) -> bool {
-        log::debug!("has prebuilt? {}", self.has_prebuilt());
-        log::debug!(
-            "prebuilt len > 1? {}",
-            self.prebuilt.as_ref().unwrap().len() > 1
-        );
-        self.has_prebuilt() && self.prebuilt.as_ref().unwrap().len() > 1
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{arch::Arch, compression::Compression, os::Os};
+    use super::{arch::Arch, os::Os};
     use crate::build::Build;
 
     #[test]
     fn should_validate_if_multi_target() {
         let build = Build {
             binary: "binary".to_string(),
-            compression: Compression::TarGz,
             arch: Some(vec![Arch::Amd64]),
             os: Some(vec![Os::UnknownLinuxGnu]),
             prebuilt: None,
@@ -77,7 +80,6 @@ mod tests {
     fn should_validate_id_single_target() {
         let build = Build {
             binary: "binary".to_string(),
-            compression: Compression::TarGz,
             arch: None,
             os: None,
             prebuilt: None,
@@ -90,7 +92,6 @@ mod tests {
     fn should_validate_if_multi_arch() {
         let build = Build {
             binary: "binary".to_string(),
-            compression: Compression::TarGz,
             arch: Some(vec![Arch::Amd64]),
             os: None,
             prebuilt: None,
@@ -103,7 +104,6 @@ mod tests {
     fn should_validate_if_single_arch() {
         let build = Build {
             binary: "binary".to_string(),
-            compression: Compression::TarGz,
             arch: None,
             os: None,
             prebuilt: None,
@@ -116,7 +116,6 @@ mod tests {
     fn should_validate_if_multi_os() {
         let build = Build {
             binary: "binary".to_string(),
-            compression: Compression::TarGz,
             arch: None,
             os: Some(vec![Os::UnknownLinuxGnu]),
             prebuilt: None,
@@ -129,7 +128,6 @@ mod tests {
     fn should_validate_if_single_os() {
         let build = Build {
             binary: "binary".to_string(),
-            compression: Compression::TarGz,
             arch: None,
             os: None,
             prebuilt: None,

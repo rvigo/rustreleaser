@@ -11,17 +11,13 @@ impl Tag {
         Tag { name: name.into() }
     }
 
-    pub fn value(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
     /// Strip the leading 'v' from the tag name if it exists
     pub fn strip_v_prefix(&self) -> &str {
-        if self.name.starts_with('v') {
-            self.name.strip_prefix('v').unwrap_or_default()
-        } else {
-            &self.name
-        }
+        self.name.strip_prefix('v').unwrap_or(&self.name)
     }
 
     pub fn empty() -> Tag {
@@ -39,7 +35,7 @@ mod tests {
     fn should_create_a_new_tag() {
         let tag = Tag::new("v1.0.0");
 
-        assert_eq!(tag.value(), "v1.0.0");
+        assert_eq!(tag.name(), "v1.0.0");
     }
 
     #[test]
@@ -60,6 +56,6 @@ mod tests {
     fn should_create_a_empty_tag() {
         let tag = Tag::empty();
 
-        assert_eq!(tag.value(), "");
+        assert_eq!(tag.name(), "");
     }
 }

@@ -1,4 +1,4 @@
-use crate::github::tag::Tag;
+use crate::git::tag::Tag;
 
 pub struct ReleaseDto {
     pub owner: String,

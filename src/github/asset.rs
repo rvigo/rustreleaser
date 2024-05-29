@@ -21,7 +21,7 @@ impl Asset {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UploadedAsset {
     pub name: String,
     pub url: String,

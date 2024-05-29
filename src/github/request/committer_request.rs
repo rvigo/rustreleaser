@@ -1,5 +1,6 @@
-use crate::build::committer::Committer;
 use serde::{Deserialize, Serialize};
+
+use crate::git::committer::Committer;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommitterRequest {

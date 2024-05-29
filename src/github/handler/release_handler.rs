@@ -1,6 +1,8 @@
-use crate::github::{
-    builder::create_release_builder::CreateReleaseBuilder, github_client, release::Release,
-    tag::Tag,
+use crate::{
+    git::tag::Tag,
+    github::{
+        builder::create_release_builder::CreateReleaseBuilder, github_client, release::Release,
+    },
 };
 use anyhow::Result;
 

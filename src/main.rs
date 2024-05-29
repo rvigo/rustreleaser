@@ -1,18 +1,16 @@
-mod arch_os_matrix;
 mod brew;
 mod build;
 mod cargo;
 mod checksum;
-mod compress;
+mod compression;
 mod config;
 mod git;
 mod github;
 mod http;
 mod logger;
-mod target;
-mod template;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use build::TargetType;
 use config::Config;
 
 #[tokio::main]
@@ -20,12 +18,11 @@ async fn main() -> Result<()> {
     logger::init()?;
 
     log::info!("Starting");
-
-    let config = Config::load().await?;
+    let config = Config::load().await.context("Cannot load config file")?;
     let build_info = config.build;
     let release_info = config.release;
 
-    if !build_info.has_prebuilt() {
+    if build_info.target_type() != TargetType::PreBuilt {
         log::info!("Building");
         cargo::build(&build_info).await?;
     }
@@ -35,7 +32,7 @@ async fn main() -> Result<()> {
 
     if config.brew.is_some() {
         log::info!("Creating brew formula");
-        brew::release(config.brew.unwrap(), packages).await?;
+        brew::publish(config.brew.unwrap(), packages).await?;
     }
 
     Ok(())

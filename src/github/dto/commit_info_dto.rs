@@ -1,4 +1,4 @@
-use crate::build::committer::Committer;
+use crate::git::committer::Committer;
 
 pub struct CommitInfoDto {
     pub message: String,

@@ -12,10 +12,10 @@ use super::{
         assignees_request::AssigneesRequest, labels_request::LabelsRequest,
         pull_request_response::PullRequest, release_response::ReleaseResponse, sha_response::Sha,
     },
-    tag::Tag,
 };
 use crate::{
     get,
+    git::tag::Tag,
     github::{release::Release, request::upsert_file_request::UpsertFileRequest},
     post, put, upload_file,
 };
@@ -242,7 +242,7 @@ impl GithubClient {
         );
 
         let request = CreateReleaseRequest::new(
-            release_dto.tag.value(),
+            release_dto.tag.name(),
             release_dto.target_branch,
             release_dto.release_name,
             release_dto.body,
@@ -273,7 +273,7 @@ impl GithubClient {
             "https://api.github.com/repos/{}/{}/releases/tags/{}",
             owner,
             repo,
-            tag.value()
+            tag.name()
         );
 
         let response = get!(&uri)?;

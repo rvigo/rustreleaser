@@ -30,6 +30,8 @@ base64 = "0.21.7"
 thiserror = "1.0.57"
 which = "6.0.0"
 tokio-stream = "0.1"
+glob = "0.3.1"
+semver = "1.0.23"
 
 [dev-dependencies]
 tempdir = "0.3.7"
