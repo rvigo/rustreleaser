@@ -4,10 +4,10 @@ use crate::{
     checksum::Checksum,
     compression::{compress_file, Compression},
     config::ReleaseConfig,
-    git,
+    cwd, git,
     github::{
         asset::Asset,
-        asset_arch_os_matrix::{AssetArchOsMatrix, AssetArchOsMatrixEntry},
+        asset_matrix::{AssetMatrix, AssetMatrixEntry},
         create_compressed_asset, get_release,
     },
 };
@@ -19,18 +19,19 @@ pub async fn release(
     compression: &Compression,
 ) -> Result<Vec<Package>> {
     let prebuilt_items = build.to_owned().prebuilt.unwrap_or_default();
-    let mut matrix: AssetArchOsMatrix = AssetArchOsMatrix::default();
+    let mut matrix: AssetMatrix = AssetMatrix::default();
 
-    let tag = git::get_current_tag()?;
+    let tag = git::get_current_tag(cwd!())?;
     for prebuilt in prebuilt_items.iter() {
         let path = prebuilt.path.to_owned();
         if path.is_dir() {
-            log::info!("path is a directory, ignoring");
+            log::debug!("path is a directory, ignoring");
             continue;
         }
+        // TODO fix this
         let name = path.file_name().unwrap().to_str().unwrap().to_owned();
         log::debug!("creating matrix entry for {:#?}", name);
-        let mut entry = AssetArchOsMatrixEntry::new(
+        let mut entry = AssetMatrixEntry::new(
             prebuilt.arch.as_ref().unwrap(),
             prebuilt.os.as_ref().unwrap(),
             &name,

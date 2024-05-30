@@ -4,10 +4,11 @@ pub mod tag;
 use anyhow::{bail, Context, Result};
 use git2::Repository;
 use semver::Version;
+use std::path::Path;
 use tag::Tag;
 
-pub fn get_current_tag() -> Result<Tag> {
-    let repo = Repository::open(".").context("Cannot read repo info")?;
+pub fn get_current_tag(repo_path: impl AsRef<Path>) -> Result<Tag> {
+    let repo = Repository::open(repo_path).context("Cannot read repo info")?;
     let tags = repo.tag_names(None)?;
 
     let mut tags = tags
@@ -30,175 +31,145 @@ pub fn get_current_tag() -> Result<Tag> {
     Ok(tag.to_owned())
 }
 
+// Get the current working directory (always pointing to ".")
+#[macro_export]
+macro_rules! cwd {
+    () => {{
+        use anyhow::Context;
+        std::env::current_dir().context("Cannot read current directory")?
+    }};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use git2::Repository;
+    use git2::{ConfigLevel, Repository};
     use std::{
         fs::{self},
         path::Path,
-        process::Command,
     };
     use tempdir::TempDir;
 
-    fn init_gitconfig() {
-        let _ = Command::new("git")
-            .args(&["config", "--local", "user.name", "Test User"])
-            .output()
-            .expect("Failed to set user name for test");
+    const CONFIG_TEMPLATE: &str = r#"
+    [user]
+        name = Test User
+        email = test@example.com
+    "#;
 
-        let _ = Command::new("git")
-            .args(&["config", "--local", "user.email", "test@example.com"])
-            .output()
-            .expect("Failed to set email for test");
+    fn init_repo() -> Result<(TempDir, Repository)> {
+        let dir = TempDir::new("git")?;
+        let dir_path = dir.path();
 
-        let _ = Command::new("git")
-            .args(&[
-                "config",
-                "--local",
-                "http.https://github.com/.extraheader",
-                "AUTHORIZATION: basic ***",
-            ])
-            .output()
-            .expect("Failed to set extraheader for test");
+        println!("initiating repo in {:?}", dir_path);
+        let repo = Repository::init(dir_path)?;
+
+        fs::write(dir_path.join(".gitconfig"), CONFIG_TEMPLATE)?;
+
+        let mut config = repo.config()?;
+        config.add_file(&dir_path.join(".gitconfig"), ConfigLevel::Local, true)?;
+
+        Ok((dir, repo))
+    }
+
+    macro_rules! commit {
+        ($repo:expr, $msg:expr) => {
+            let mut index = $repo.index()?;
+            let oid = index.write_tree()?;
+            let signature = $repo.signature()?;
+            let head = $repo.head();
+            let parent = if head.is_ok() {
+                match head?.peel_to_commit() {
+                    Ok(commit) => {
+                        vec![commit]
+                    }
+                    Err(_) => {
+                        vec![]
+                    }
+                }
+            } else {
+                vec![]
+            };
+
+            $repo.commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                $msg,
+                &$repo.find_tree(oid)?,
+                &parent.iter().collect::<Vec<_>>(),
+            )?;
+        };
+    }
+
+    macro_rules! tag {
+        ($repo:expr, $name:expr) => {
+            let signature = $repo.signature()?;
+            let obj = $repo.revparse_single("HEAD")?;
+            $repo.tag($name, &obj, &signature, "", false)?;
+        };
     }
 
     #[test]
     fn test_get_current_tag() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = TempDir::new("git")?;
-        init_gitconfig();
+        let (tmp, repo) = init_repo()?;
+        let path = tmp.path();
+        let file_path = path.join("test.txt");
 
-        let repo = Repository::init(dir.path())?;
-
-        fs::write(dir.path().join("test.txt"), "Hello, world!")?;
+        fs::write(file_path, "Hello, world!")?;
 
         let mut index = repo.index()?;
         index.add_path(Path::new("test.txt"))?;
-        let oid = index.write_tree()?;
-        let signature = repo.signature()?;
-        repo.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            "Initial commit",
-            &repo.find_tree(oid)?,
-            &[],
-        )?;
 
-        let obj = &repo.revparse_single("HEAD")?;
-        repo.tag("v1.0.0", obj, &signature, "Version 1.0.0", false)?;
+        commit!(repo, "Initial commit");
 
-        println!("creating commit 2");
+        tag!(repo, "v1.0.0");
 
-        let oid = index.write_tree()?;
-        let parent_commit = repo.head()?.peel_to_commit()?;
+        commit!(repo, "commit");
 
-        repo.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            "commit",
-            &repo.find_tree(oid)?,
-            &[&parent_commit],
-        )?;
+        tag!(repo, "v2.0.0");
 
-        println!("creating tag 2");
-        let obj = &repo.revparse_single("HEAD")?;
-        repo.tag("v2.0.0", obj, &signature, "Version 2.0.0", false)?;
-
-        std::env::set_current_dir(dir.path())?;
-
-        let tag = get_current_tag()?;
+        let tag = get_current_tag(path)?;
 
         assert_eq!(tag.name(), "v2.0.0");
-
-        dir.close()?;
 
         Ok(())
     }
 
     #[test]
     fn test_get_current_tag_no_tags() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = TempDir::new("git")?;
-        init_gitconfig();
+        let (path, _) = init_repo()?;
 
-        Repository::init(dir.path())?;
-
-        std::env::set_current_dir(dir.path())?;
-
-        let result = get_current_tag();
+        let result = get_current_tag(path.path());
 
         assert!(result.is_err());
-
-        dir.close()?;
 
         Ok(())
     }
 
     #[test]
     fn test_handle_different_formats() -> Result<(), Box<dyn std::error::Error>> {
-        let dir = TempDir::new("git")?;
-        init_gitconfig();
+        let (path, repo) = init_repo()?;
 
-        let repo = Repository::init(dir.path())?;
-
-        fs::write(dir.path().join("test.txt"), "Hello, world!")?;
+        fs::write(path.path().join("test.txt"), "Hello, world!")?;
 
         let mut index = repo.index()?;
         index.add_path(Path::new("test.txt"))?;
 
-        let oid = index.write_tree()?;
-        let signature = repo.signature()?;
-        repo.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            "Initial commit",
-            &repo.find_tree(oid)?,
-            &[],
-        )?;
+        commit!(repo, "Initial commit");
+        tag!(repo, "v1.1.1");
 
-        let obj = &repo.revparse_single("HEAD")?;
-        repo.tag("1.1.8", obj, &signature, "Version 1.1.8", false)?;
+        commit!(repo, "Second commit");
 
-        println!("creating commit 2");
-        let oid = index.write_tree()?;
-        let parent_commit = repo.head()?.peel_to_commit()?;
-
-        println!("creating tag 2");
-        repo.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            "commit",
-            &repo.find_tree(oid)?,
-            &[&parent_commit],
-        )?;
-
-        let obj = &repo.revparse_single("HEAD")?;
-        repo.tag("v1.1.9", obj, &signature, "Version 1.1.9", false)?;
-
+        tag!(repo, "v1.1.9");
         println!("creating commit 3");
-        let oid = index.write_tree()?;
-        let parent_commit = repo.head()?.peel_to_commit()?;
 
-        println!("creating tag 2");
-        repo.commit(
-            Some("HEAD"),
-            &signature,
-            &signature,
-            "commit",
-            &repo.find_tree(oid)?,
-            &[&parent_commit],
-        )?;
+        commit!(repo, "Third commit");
 
-        let obj = &repo.revparse_single("HEAD")?;
-        repo.tag("v1.1.10-beta", obj, &signature, "Version 1.1.10", false)?;
-        std::env::set_current_dir(dir.path())?;
+        tag!(repo, "v1.1.10-beta");
 
-        let tag = get_current_tag()?;
+        let tag = get_current_tag(path.path())?;
+
         assert_eq!(tag.name(), "v1.1.10-beta");
-
         Ok(())
     }
 }

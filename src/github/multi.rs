@@ -1,20 +1,21 @@
 use super::{
-    asset_arch_os_matrix::{AssetArchOsMatrix, AssetArchOsMatrixEntry},
-    check_binary, create_compressed_asset, get_release, Assets,
+    asset::Assets,
+    asset_matrix::{AssetMatrix, AssetMatrixEntry},
+    check_binary, create_compressed_asset, get_release,
 };
 use crate::{
     brew::package::Package, build::Build, checksum::Checksum, compression::compress_file,
-    config::ReleaseConfig, git,
+    config::ReleaseConfig, cwd, git,
 };
 use anyhow::Result;
 use std::path::PathBuf;
 
 pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Package>> {
-    let tag = git::get_current_tag()?;
+    let tag = git::get_current_tag(cwd!())?;
 
     let archs = build.arch.to_owned().unwrap_or_default();
     let os = build.os.to_owned().unwrap_or_default();
-    let mut matrix: AssetArchOsMatrix = AssetArchOsMatrix::default();
+    let mut matrix: AssetMatrix = AssetMatrix::default();
 
     for arch in &archs {
         for os in &os {
@@ -24,7 +25,7 @@ pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Ve
                 Some(format!("{}-{}", &arch.to_string(), &os.to_string())),
             )?;
 
-            let mut entry = AssetArchOsMatrixEntry::new(
+            let mut entry = AssetMatrixEntry::new(
                 arch,
                 os,
                 binary,

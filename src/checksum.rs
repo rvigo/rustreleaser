@@ -8,15 +8,15 @@ pub struct Checksum {
 }
 
 impl Checksum {
-    pub fn new(value: impl AsRef<Path>) -> Result<Self> {
-        Self::create(value)
+    pub fn new(asset_path: impl AsRef<Path>) -> Result<Self> {
+        Self::create(asset_path)
     }
 
     pub fn value(&self) -> &str {
         &self.value
     }
 
-    pub fn create(path: impl AsRef<Path>) -> Result<Self> {
+    fn create(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let mut file = File::open(path).context("Cannot open file")?;
 

@@ -24,15 +24,21 @@ async fn main() -> Result<()> {
 
     if build_info.target_type() != TargetType::PreBuilt {
         log::info!("Building");
-        cargo::build(&build_info).await?;
+        cargo::build(&build_info)
+            .await
+            .context("Cannot build the project")?;
     }
 
     log::info!("Creating release");
-    let packages = github::release(&build_info, &release_info).await?;
+    let packages = github::release(&build_info, &release_info)
+        .await
+        .context("Cannot create the github release")?;
 
-    if config.brew.is_some() {
+    if let Some(brew) = config.brew {
         log::info!("Creating brew formula");
-        brew::publish(config.brew.unwrap(), packages).await?;
+        brew::publish(brew, packages)
+            .await
+            .context("Cannot publish the brew formula")?;
     }
 
     Ok(())

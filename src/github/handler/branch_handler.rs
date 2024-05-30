@@ -1,5 +1,6 @@
 use crate::github::{
-    builder::upsert_file_builder::UpsertFileBuilder, github_client, response::sha_response::Sha,
+    github_client, handler::builder::upsert_file_builder::UpsertFileBuilder,
+    response::sha_response::Sha,
 };
 use anyhow::Result;
 

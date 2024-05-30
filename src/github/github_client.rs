@@ -1,28 +1,30 @@
+use std::env;
+
 use super::{
-    asset::{Asset, UploadedAsset},
-    dto::{
-        commit_info_dto::CommitInfoDto, pull_request_dto::PullRequestDto, release_dto::ReleaseDto,
-    },
-    handler::repository_handler::RepositoryHandler,
+    dto::{pull_request_dto::PullRequestDto, release_dto::ReleaseDto},
     request::{
-        branch_ref_request::BranchRefRequest, create_release_request::CreateReleaseRequest,
+        assignees_request::AssigneesRequest, branch_ref_request::BranchRefRequest,
+        create_release_request::CreateReleaseRequest, labels_request::LabelsRequest,
         pull_request_request::PullRequestRequest,
     },
     response::{
-        assignees_request::AssigneesRequest, labels_request::LabelsRequest,
         pull_request_response::PullRequest, release_response::ReleaseResponse, sha_response::Sha,
     },
 };
 use crate::{
     get,
     git::tag::Tag,
-    github::{release::Release, request::upsert_file_request::UpsertFileRequest},
+    github::{
+        asset::{Asset, UploadedAsset},
+        dto::commit_info_dto::CommitInfoDto,
+        release::Release,
+        request::upsert_file_request::UpsertFileRequest,
+    },
     post, put, upload_file,
 };
 use anyhow::{Context, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use once_cell::sync::Lazy;
-use std::env;
 use tokio::{fs::File, io::AsyncReadExt};
 
 pub static GITHUB_TOKEN: Lazy<String> =
@@ -34,13 +36,14 @@ pub fn instance() -> &'static GithubClient {
     &CLIENT
 }
 
+const GITHUB_API_DEFAULT_URL: &str = "https://api.github.com";
+const GITHUB_API_REPO_URL: &str = "https://api.github.com/repos";
+const GITHUB_API_UPLOAD_URL: &str = "https://uploads.github.com/repos";
+
 pub struct GithubClient;
 
+/// Github client api internal implementation
 impl GithubClient {
-    pub fn repo(&self, owner: impl Into<String>, name: impl Into<String>) -> RepositoryHandler {
-        RepositoryHandler::new(owner, name)
-    }
-
     pub(super) async fn upload_asset(
         &self,
         asset: &Asset,
@@ -58,14 +61,15 @@ impl GithubClient {
         let repo = repo.into();
 
         let uri = format!(
-            "https://uploads.github.com/repos/{}/{}/releases/{}/assets?name={}",
-            &owner, &repo, release_id, asset.name
+            "{}/{}/{}/releases/{}/assets?name={}",
+            GITHUB_API_UPLOAD_URL, &owner, &repo, release_id, asset.name
         );
 
         upload_file!(uri, content)?;
 
         let asset_url = format!(
-            "https://github.com/{}/{}/releases/download/v{}/{}",
+            "{}/{}/{}/releases/download/v{}/{}",
+            GITHUB_API_DEFAULT_URL,
             &owner,
             &repo,
             tag.strip_v_prefix(),
@@ -104,8 +108,8 @@ impl GithubClient {
         let base = base.into();
 
         let uri = format!(
-            "https://api.github.com/repos/{}/{}/commits/{}",
-            &owner, &repo, &base
+            "{}/{}/{}/commits/{}",
+            GITHUB_API_REPO_URL, &owner, &repo, &base
         );
 
         let response = get!(&uri)?;
@@ -122,7 +126,7 @@ impl GithubClient {
         branch: &str,
         sha: &str,
     ) -> Result<()> {
-        let uri = format!("https://api.github.com/repos/{}/{}/git/refs", owner, repo);
+        let uri = format!("{}/{}/{}/git/refs", GITHUB_API_REPO_URL, owner, repo);
 
         let request = BranchRefRequest::new(branch.to_string(), sha.to_string());
 
@@ -146,8 +150,8 @@ impl GithubClient {
         let content = BASE64_STANDARD.encode(content.as_bytes());
 
         let uri = &format!(
-            "https://api.github.com/repos/{}/{}/contents/{}",
-            owner, repo, path
+            "{}/{}/{}/contents/{}",
+            GITHUB_API_REPO_URL, owner, repo, path
         );
 
         let file_sha = get!(uri).context("failed to get Formula sha value")?;
@@ -181,8 +185,8 @@ impl GithubClient {
         };
 
         let uri = format!(
-            "https://api.github.com/repos/{}/{}/contents/{}",
-            owner, repo, path
+            "{}/{}/{}/contents/{}",
+            GITHUB_API_REPO_URL, owner, repo, path
         );
 
         put!(uri, body)?;
@@ -196,8 +200,8 @@ impl GithubClient {
     ) -> Result<PullRequest> {
         log::debug!("Creating pull request");
         let uri = format!(
-            "https://api.github.com/repos/{}/{}/pulls",
-            pull_request.owner, pull_request.repo
+            "{}/{}/{}/pulls",
+            GITHUB_API_REPO_URL, pull_request.owner, pull_request.repo
         );
 
         let request = PullRequestRequest::new(
@@ -237,8 +241,8 @@ impl GithubClient {
 
     pub(super) async fn create_release(&self, release_dto: ReleaseDto) -> Result<Release> {
         let uri = format!(
-            "https://api.github.com/repos/{}/{}/releases",
-            release_dto.owner, release_dto.repo
+            "{}/{}/{}/releases",
+            GITHUB_API_REPO_URL, release_dto.owner, release_dto.repo
         );
 
         let request = CreateReleaseRequest::new(
@@ -270,7 +274,8 @@ impl GithubClient {
         tag: &Tag,
     ) -> Result<Release> {
         let uri = format!(
-            "https://api.github.com/repos/{}/{}/releases/tags/{}",
+            "{}/{}/{}/releases/tags/{}",
+            GITHUB_API_REPO_URL,
             owner,
             repo,
             tag.name()
@@ -290,7 +295,8 @@ impl GithubClient {
         assignees: Vec<String>,
     ) -> Result<()> {
         let uri = format!(
-            "https://api.github.com/repos/{}/{}/issues/{}/assignees",
+            "{}/{}/{}/issues/{}/assignees",
+            GITHUB_API_REPO_URL,
             owner.into(),
             repo.into(),
             pr_number
@@ -313,7 +319,8 @@ impl GithubClient {
         labels: Vec<String>,
     ) -> Result<()> {
         let uri = format!(
-            "https://api.github.com/repos/{}/{}/issues/{}/labels",
+            "{}/{}/{}/issues/{}/labels",
+            GITHUB_API_REPO_URL,
             owner.into(),
             repo.into(),
             pr_number

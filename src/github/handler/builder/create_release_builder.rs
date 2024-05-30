@@ -71,8 +71,8 @@ impl BuilderExecutor for CreateReleaseBuilder {
             self.release_tag,
             self.target_branch,
             self.release_name,
-            self.draft.unwrap(),
-            self.prerelease.unwrap(),
+            self.draft.unwrap_or_default(),
+            self.prerelease.unwrap_or_default(),
             self.body.unwrap_or_default(),
         );
         github_client::instance().create_release(release).await

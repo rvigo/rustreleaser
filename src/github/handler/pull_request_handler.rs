@@ -1,4 +1,4 @@
-use crate::github::builder::create_pull_request_builder::CreatePullRequestBuilder;
+use super::builder::create_pull_request_builder::CreatePullRequestBuilder;
 
 pub struct PullRequestHandler {
     owner: String,

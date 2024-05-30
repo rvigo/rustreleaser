@@ -1,3 +1,4 @@
+use super::asset_matrix::AssetMatrix;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -35,5 +36,27 @@ impl UploadedAsset {
             url,
             checksum,
         }
+    }
+}
+
+pub type Assets = Vec<Asset>;
+
+impl From<&AssetMatrix<'_>> for Assets {
+    fn from(value: &AssetMatrix) -> Self {
+        value
+            .iter()
+            .cloned()
+            .filter_map(|entry| entry.asset)
+            .collect()
+    }
+}
+
+impl From<AssetMatrix<'_>> for Assets {
+    fn from(value: AssetMatrix) -> Self {
+        value
+            .iter()
+            .cloned()
+            .filter_map(|entry| entry.asset)
+            .collect()
     }
 }

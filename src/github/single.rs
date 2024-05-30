@@ -4,7 +4,7 @@ use crate::{
     checksum::Checksum,
     compression::compress_file,
     config::ReleaseConfig,
-    git,
+    cwd, git,
     github::{check_binary, create_compressed_asset, get_release, SINGLE_TARGET_DIR},
 };
 use anyhow::{bail, Result};
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Vec<Package>> {
     check_binary(&build.binary.to_owned(), None)?;
 
-    let tag = git::get_current_tag()?;
+    let tag = git::get_current_tag(cwd!())?;
 
     let binary_name = format!(
         "{}_{}.{}",

@@ -1,4 +1,4 @@
-use crate::github::builder::create_branch_builder::CreateBranchBuilder;
+use crate::github::handler::builder::create_branch_builder::CreateBranchBuilder;
 
 pub struct BranchesHandler {
     owner: String,

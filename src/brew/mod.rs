@@ -10,13 +10,14 @@ use self::{
 };
 use crate::{
     brew::template::handlebars,
+    cwd,
     git::{committer::Committer, tag::Tag},
+    github::{github_client, handler::BuilderExecutor},
 };
 use crate::{
     build::arch::Arch,
     config::{BrewConfig, CommitterConfig, PullRequestConfig},
     git,
-    github::{builder::BuilderExecutor, github_client},
 };
 use anyhow::{Context, Result};
 use itertools::Itertools;
@@ -89,7 +90,7 @@ impl BrewArch {
 pub async fn publish(brew_config: BrewConfig, packages: Vec<Package>) -> Result<String> {
     log::debug!("packages: {:?}", packages);
 
-    let brew = Brew::new(brew_config, git::get_current_tag()?, packages);
+    let brew = Brew::new(brew_config, git::get_current_tag(cwd!())?, packages);
     log::debug!("Rendering Formula template {}", brew.template.to_string());
 
     let data = serialize(&brew)?;
@@ -135,19 +136,16 @@ async fn push_formula(brew: Brew) -> Result<()> {
     let pull_request = brew.pull_request.unwrap();
 
     let committer = brew.commit_author.map(Committer::from).unwrap_or_default();
-
-    let repo_handler =
-        github_client::instance().repo(&brew.repository.owner, &brew.repository.name);
+    let repo = github_client::instance().repo(&brew.repository.owner, &brew.repository.name);
 
     log::debug!("Creating branch");
-    let sha = repo_handler
+    let sha = repo
         .branch(&pull_request.base)
         .get_commit_sha()
         .await
         .context("error getting the base branch commit sha")?;
 
-    repo_handler
-        .branches()
+    repo.branches()
         .create()
         .branch(&pull_request.head)
         .sha(sha.sha)
@@ -158,8 +156,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
     let content = fs::read_to_string(format!("{}.rb", brew.name))?;
 
     log::debug!("Updating formula");
-    repo_handler
-        .branch(&pull_request.head)
+    repo.branch(&pull_request.head)
         .upsert_file()
         .path(format!("{}.rb", brew.name))
         .message(brew.commit_message)
@@ -170,8 +167,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .context("error uploading file to head branch")?;
 
     log::debug!("Creating pull request");
-    repo_handler
-        .pull_request()
+    repo.pull_request()
         .create()
         .assignees(pull_request.assignees.unwrap_or_default())
         .base(pull_request.base)

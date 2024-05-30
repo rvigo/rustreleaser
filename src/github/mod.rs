@@ -1,9 +1,8 @@
 pub mod asset;
-mod asset_arch_os_matrix;
-pub mod builder;
+mod asset_matrix;
 mod dto;
 pub mod github_client;
-mod handler;
+pub mod handler;
 mod macros;
 mod multi;
 mod prebuilt;
@@ -18,8 +17,7 @@ use crate::{
     git::tag::Tag, github::asset::Asset,
 };
 use anyhow::{bail, Result};
-use asset_arch_os_matrix::AssetArchOsMatrix;
-use builder::BuilderExecutor;
+use handler::BuilderExecutor;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -51,7 +49,7 @@ fn check_binary(name: &str, target: Option<String>) -> Result<()> {
     let binary_path = if let Some(target) = target {
         format!("target/{}/release/{}", target, name)
     } else {
-        format!("target/release/{}", name)
+        format!("{}/{}", SINGLE_TARGET_DIR, name)
     };
 
     if !PathBuf::from(binary_path).exists() {
@@ -130,27 +128,5 @@ fn generate_checksum_asset(asset: &Asset) -> Result<Asset> {
             "checksum is not available for asset {:#?}",
             asset
         ))
-    }
-}
-
-type Assets = Vec<Asset>;
-
-impl From<&AssetArchOsMatrix<'_>> for Assets {
-    fn from(value: &AssetArchOsMatrix) -> Self {
-        value
-            .iter()
-            .cloned()
-            .filter_map(|entry| entry.asset)
-            .collect()
-    }
-}
-
-impl From<AssetArchOsMatrix<'_>> for Assets {
-    fn from(value: AssetArchOsMatrix) -> Self {
-        value
-            .iter()
-            .cloned()
-            .filter_map(|entry| entry.asset)
-            .collect()
     }
 }

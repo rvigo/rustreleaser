@@ -7,7 +7,7 @@ use crate::{
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone)]
-pub struct AssetArchOsMatrixEntry<'matrix> {
+pub struct AssetMatrixEntry<'matrix> {
     pub arch: &'matrix Arch,
     pub os: &'matrix Os,
     pub name: String,
@@ -15,7 +15,7 @@ pub struct AssetArchOsMatrixEntry<'matrix> {
     pub prebuilt: bool,
 }
 
-impl<'matrix> AssetArchOsMatrixEntry<'matrix> {
+impl<'matrix> AssetMatrixEntry<'matrix> {
     pub fn new(
         arch: &'matrix Arch,
         os: &'matrix Os,
@@ -47,13 +47,13 @@ impl<'matrix> AssetArchOsMatrixEntry<'matrix> {
 }
 
 #[derive(Clone)]
-pub struct EnrichedAssetArchOsMatrixEntry<'matrix> {
-    entry: AssetArchOsMatrixEntry<'matrix>,
+pub struct EnrichedMatrixEntry<'matrix> {
+    entry: AssetMatrixEntry<'matrix>,
     uploaded_asset: UploadedAsset,
 }
 
-impl<'a> EnrichedAssetArchOsMatrixEntry<'a> {
-    pub fn new(entry: AssetArchOsMatrixEntry<'a>, uploaded_asset: UploadedAsset) -> Self {
+impl<'matrix> EnrichedMatrixEntry<'matrix> {
+    pub fn new(entry: AssetMatrixEntry<'matrix>, uploaded_asset: UploadedAsset) -> Self {
         Self {
             entry,
             uploaded_asset,
@@ -73,13 +73,10 @@ impl<'a> EnrichedAssetArchOsMatrixEntry<'a> {
 }
 
 #[derive(Default)]
-pub struct AssetArchOsMatrix<'matrix>(Vec<AssetArchOsMatrixEntry<'matrix>>);
+pub struct AssetMatrix<'matrix>(Vec<AssetMatrixEntry<'matrix>>);
 
-impl AssetArchOsMatrix<'_> {
-    pub fn enrich(
-        &self,
-        uploaded_assets: Vec<UploadedAsset>,
-    ) -> Vec<EnrichedAssetArchOsMatrixEntry> {
+impl AssetMatrix<'_> {
+    pub fn enrich(&self, uploaded_assets: Vec<UploadedAsset>) -> Vec<EnrichedMatrixEntry> {
         self.iter()
             .map(|entry| {
                 let uploaded_asset = uploaded_assets
@@ -87,21 +84,21 @@ impl AssetArchOsMatrix<'_> {
                     .find(|asset| asset.name == entry.name)
                     .expect("asset not found");
 
-                EnrichedAssetArchOsMatrixEntry::new(entry.to_owned(), uploaded_asset.to_owned())
+                EnrichedMatrixEntry::new(entry.to_owned(), uploaded_asset.to_owned())
             })
             .collect()
     }
 }
 
-impl<'deref> Deref for AssetArchOsMatrix<'deref> {
-    type Target = Vec<AssetArchOsMatrixEntry<'deref>>;
+impl<'deref> Deref for AssetMatrix<'deref> {
+    type Target = Vec<AssetMatrixEntry<'deref>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for AssetArchOsMatrix<'_> {
+impl DerefMut for AssetMatrix<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
