@@ -35,7 +35,7 @@ pub fn instance() -> &'static GithubClient {
     &CLIENT
 }
 
-const GITHUB_API_DEFAULT_URL: &str = "https://api.github.com";
+const GITHUB_DEFAULT_URL: &str = "https://github.com";
 const GITHUB_API_REPO_URL: &str = "https://api.github.com/repos";
 const GITHUB_API_UPLOAD_URL: &str = "https://uploads.github.com/repos";
 
@@ -68,7 +68,7 @@ impl GithubClient {
 
         let asset_url = format!(
             "{}/{}/{}/releases/download/v{}/{}",
-            GITHUB_API_DEFAULT_URL,
+            GITHUB_DEFAULT_URL,
             &owner,
             &repo,
             tag.strip_v_prefix(),
