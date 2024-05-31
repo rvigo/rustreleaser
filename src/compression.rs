@@ -60,14 +60,14 @@ fn tar_gz(
             for entry in glob {
                 let path = entry.context("Cannot get path")?;
 
-                log::debug!("archiving file: {}", path.display());
-
                 if path.is_file() {
-                    let file_name = path.file_name().unwrap();
-                    let mut file = File::open(&path).context("Cannot open file")?;
+                    log::debug!("archiving file: {}", path.display());
+                    archive.append_path(path).context("Cannot archive file")?;
+                } else if path.is_dir() {
+                    log::debug!("archiving dir: {}", path.display());
                     archive
-                        .append_file(file_name, &mut file)
-                        .context("Cannot archive file")?;
+                        .append_dir(&path, ".")
+                        .context("Cannot archive directory")?;
                 }
             }
         }
