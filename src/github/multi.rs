@@ -26,11 +26,11 @@ pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Ve
             )?;
 
             let mut entry = AssetMatrixEntry::new(
-                arch,
-                os,
+                arch.clone(),
+                os.clone(),
                 binary,
                 tag.name(),
-                &release_config.archive.compression,
+                release_config.archive.compression.clone(),
                 false,
             );
 

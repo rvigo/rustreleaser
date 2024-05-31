@@ -8,27 +8,27 @@ use anyhow::Context;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone)]
-pub struct AssetMatrixEntry<'matrix> {
-    pub arch: &'matrix Arch,
-    pub os: &'matrix Os,
+pub struct AssetMatrixEntry {
+    pub arch: Arch,
+    pub os: Os,
     pub name: String,
     pub asset: Option<Asset>,
     pub prebuilt: bool,
 }
 
-impl<'matrix> AssetMatrixEntry<'matrix> {
+impl AssetMatrixEntry {
     pub fn new(
-        arch: &'matrix Arch,
-        os: &'matrix Os,
+        arch: Arch,
+        os: Os,
         name: impl Into<String>,
-        tag: &'matrix str,
-        compression: &'matrix Compression,
+        tag: impl Into<String>,
+        compression: Compression,
         prebuilt: bool,
     ) -> Self {
         let name = format!(
             "{}_{}_{}_{}.{}",
             name.into(),
-            tag,
+            tag.into(),
             arch.to_string(),
             os.to_string(),
             compression.extension()
@@ -48,13 +48,13 @@ impl<'matrix> AssetMatrixEntry<'matrix> {
 }
 
 #[derive(Clone)]
-pub struct EnrichedMatrixEntry<'matrix> {
-    entry: AssetMatrixEntry<'matrix>,
+pub struct EnrichedMatrixEntry {
+    entry: AssetMatrixEntry,
     uploaded_asset: UploadedAsset,
 }
 
-impl<'matrix> EnrichedMatrixEntry<'matrix> {
-    pub fn new(entry: AssetMatrixEntry<'matrix>, uploaded_asset: UploadedAsset) -> Self {
+impl EnrichedMatrixEntry {
+    pub fn new(entry: AssetMatrixEntry, uploaded_asset: UploadedAsset) -> Self {
         Self {
             entry,
             uploaded_asset,
@@ -74,9 +74,9 @@ impl<'matrix> EnrichedMatrixEntry<'matrix> {
 }
 
 #[derive(Default)]
-pub struct AssetMatrix<'matrix>(Vec<AssetMatrixEntry<'matrix>>);
+pub struct AssetMatrix(Vec<AssetMatrixEntry>);
 
-impl AssetMatrix<'_> {
+impl AssetMatrix {
     pub fn enrich(&self, uploaded_assets: Vec<UploadedAsset>) -> Vec<EnrichedMatrixEntry> {
         self.iter()
             .map(|entry| {
@@ -92,15 +92,15 @@ impl AssetMatrix<'_> {
     }
 }
 
-impl<'deref> Deref for AssetMatrix<'deref> {
-    type Target = Vec<AssetMatrixEntry<'deref>>;
+impl Deref for AssetMatrix {
+    type Target = Vec<AssetMatrixEntry>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for AssetMatrix<'_> {
+impl DerefMut for AssetMatrix {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
