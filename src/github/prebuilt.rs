@@ -1,10 +1,12 @@
+use super::{asset::UploadedAsset, release::Release};
 use crate::{
     brew::package::Package,
     build::Build,
     checksum::Checksum,
     compression::{compress_file, Compression},
     config::ReleaseConfig,
-    cwd, git,
+    cwd,
+    git::{self, tag::Tag},
     github::{
         asset::Asset,
         asset_matrix::{AssetMatrix, AssetMatrixEntry},
@@ -12,6 +14,7 @@ use crate::{
     },
 };
 use anyhow::{bail, Result};
+use tokio::task::spawn_blocking;
 
 pub async fn release(
     build: &Build,
@@ -22,6 +25,7 @@ pub async fn release(
     let mut matrix: AssetMatrix = AssetMatrix::default();
 
     let tag = git::get_current_tag(cwd!())?;
+
     for prebuilt in prebuilt_items.iter() {
         let path = prebuilt.path.to_owned();
         if path.is_dir() {
@@ -35,7 +39,7 @@ pub async fn release(
             prebuilt.arch.as_ref().unwrap(),
             prebuilt.os.as_ref().unwrap(),
             &name,
-            tag.name(),
+            &tag.name(),
             compression,
             true,
         );
@@ -71,17 +75,12 @@ pub async fn release(
     }
 
     let release = get_release(release_config, &tag).await?;
-
+    // TODO
+    let tag2 = tag.clone();
     let assets: Vec<Asset> = Vec::<Asset>::from(&matrix);
-
-    log::debug!("uploading asset");
-    let uploaded_assets = match release.upload_assets(assets, &tag).await {
-        Ok(uploaded_assets) => uploaded_assets,
-        Err(e) => {
-            log::error!("Failed to upload asset {:#?}", e);
-            bail!(anyhow::anyhow!("Failed to upload asset"))
-        }
-    };
+    let uploaded_assets = spawn_blocking(move || upload(assets, tag2, release))
+        .await?
+        .await?;
 
     let packages: Vec<Package> = matrix
         .enrich(uploaded_assets)
@@ -91,4 +90,16 @@ pub async fn release(
         .collect();
 
     Ok(packages)
+}
+
+async fn upload(assets: Vec<Asset>, tag: Tag, release: Release) -> Result<Vec<UploadedAsset>> {
+    let uploaded_assets = match release.upload_assets(assets, &tag).await {
+        Ok(uploaded_assets) => uploaded_assets,
+        Err(e) => {
+            log::error!("Failed to upload asset {:#?}", e);
+            bail!(anyhow::anyhow!("Failed to upload asset"))
+        }
+    };
+
+    Ok(uploaded_assets)
 }
