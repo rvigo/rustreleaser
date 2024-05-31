@@ -26,7 +26,7 @@ impl AssetMatrixEntry {
         prebuilt: bool,
     ) -> Self {
         let name = format!(
-            "{}_{}_{}_{}.{}",
+            "{}-{}-{}-{}.{}",
             name.into(),
             tag.into(),
             arch.to_string(),

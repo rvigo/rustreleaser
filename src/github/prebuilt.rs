@@ -28,17 +28,21 @@ pub async fn release(
 
     let release = get_release(release_config, &tag).await?;
 
+    log::debug!("preparing to upload assets");
     let uploaded_assets_futures = release.upload_assets_raw(&assets, &tag);
     let checksum_assets_futures = assets
         .iter()
         .map(|asset| release.upload_checksum_asset_raw(&tag, &asset))
         .collect_vec();
+
+    log::debug!("uploading assets");
     let uploaded_assets = join_all(uploaded_assets_futures).await;
     let _checksum_assets = join_all(checksum_assets_futures).await;
 
     let (success, _): (Vec<_>, Vec<_>) = uploaded_assets.into_iter().partition(Result::is_ok);
     let success = success.into_iter().map(Result::unwrap).collect::<Vec<_>>();
 
+    log::debug!("creating packages");
     let packages: Vec<Package> = matrix
         .enrich(success)
         .iter()
