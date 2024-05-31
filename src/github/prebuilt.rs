@@ -60,13 +60,14 @@ pub async fn release(
 
         log::debug!("asset created: {:?}", asset);
 
-        log::debug!("generating checksum for {:#?}", full_name);
+        log::debug!("generating checksum for {}", full_name);
         let checksum = Checksum::try_from(&asset)
             .unwrap_or_else(|_| panic!("Failed to generate checksum for asset {:#?}", asset));
 
         asset.add_checksum(checksum.value());
         entry.set_asset(asset);
         matrix.push(entry);
+        log::debug!("matrix entry created for {}", full_name)
     }
 
     let release = get_release(release_config, &tag).await?;

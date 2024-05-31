@@ -4,6 +4,7 @@ use crate::{
     build::{arch::Arch, os::Os},
     compression::Compression,
 };
+use anyhow::Context;
 use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Clone)]
@@ -82,7 +83,8 @@ impl AssetMatrix<'_> {
                 let uploaded_asset = uploaded_assets
                     .iter()
                     .find(|asset| asset.name == entry.name)
-                    .expect("asset not found");
+                    .context(format!("Asset {} not found", entry.name))
+                    .expect("Asset not found");
 
                 EnrichedMatrixEntry::new(entry.to_owned(), uploaded_asset.to_owned())
             })

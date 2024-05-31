@@ -1,5 +1,3 @@
-use std::env;
-
 use super::{
     dto::{pull_request_dto::PullRequestDto, release_dto::ReleaseDto},
     request::{
@@ -25,6 +23,7 @@ use crate::{
 use anyhow::{Context, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use once_cell::sync::Lazy;
+use std::env;
 use tokio::{fs::File, io::AsyncReadExt};
 
 pub static GITHUB_TOKEN: Lazy<String> =
@@ -75,26 +74,11 @@ impl GithubClient {
             tag.strip_v_prefix(),
             asset.name
         );
-        log::debug!("creating uploaded asset");
+        log::debug!("creating uploaded asset for {}", asset.name);
         let uploaded_asset = self.create_uploaded_asset(asset, asset_url);
+        log::debug!("uploaded asset created: {:#?}", uploaded_asset);
 
         Ok(uploaded_asset)
-    }
-
-    pub(super) fn create_uploaded_asset(
-        &self,
-        asset: &Asset,
-        url: impl Into<String>,
-    ) -> UploadedAsset {
-        UploadedAsset::new(
-            asset.name.to_owned(),
-            url.into(),
-            asset
-                .checksum
-                .as_ref()
-                .unwrap_or(&String::default())
-                .to_owned(),
-        )
     }
 
     pub(super) async fn get_commit_sha(
@@ -333,5 +317,17 @@ impl GithubClient {
         post!(&uri, body)?;
 
         Ok(())
+    }
+
+    fn create_uploaded_asset(&self, asset: &Asset, url: impl Into<String>) -> UploadedAsset {
+        UploadedAsset::new(
+            asset.name.to_owned(),
+            url.into(),
+            asset
+                .checksum
+                .as_ref()
+                .unwrap_or(&String::default())
+                .to_owned(),
+        )
     }
 }
