@@ -30,7 +30,7 @@ pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Ve
                 os,
                 binary,
                 tag.name(),
-                &release_config.compression,
+                &release_config.archive.compression,
                 false,
             );
 
@@ -42,14 +42,14 @@ pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Ve
                 &build.binary.to_owned(),
                 PathBuf::from(format!("target/{}/release/{}", target, build.binary)),
                 &entry_name,
-                &release_config.archive,
-                &release_config.compression,
+                &release_config.archive.files,
+                &release_config.archive.compression,
             )?;
 
             let mut asset = create_compressed_asset(
                 &entry.name,
                 compressed_file_path,
-                &release_config.compression,
+                &release_config.archive.compression,
             );
             let checksum = Checksum::try_from(&asset)
                 .unwrap_or_else(|_| panic!("Failed to generate checksum for asset {:#?}", asset));

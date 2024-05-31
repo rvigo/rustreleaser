@@ -19,7 +19,7 @@ pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Ve
         "{}_{}.{}",
         build.binary,
         tag.name(),
-        release_config.compression.extension()
+        release_config.archive.compression.extension()
     );
 
     log::debug!("compressing binary");
@@ -27,15 +27,15 @@ pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Ve
         &build.binary.to_owned(),
         PathBuf::from(format!("{}/{}", SINGLE_TARGET_DIR, build.binary)),
         &binary_name.to_owned(),
-        &release_config.archive,
-        &release_config.compression,
+        &release_config.archive.files,
+        &release_config.archive.compression,
     )?;
 
     log::debug!("creating asset");
     let mut asset = create_compressed_asset(
         &binary_name,
         compressed_file_path,
-        &release_config.compression,
+        &release_config.archive.compression,
     );
 
     log::debug!("generating checksum");

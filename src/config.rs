@@ -104,12 +104,18 @@ pub struct ReleaseConfig {
     #[serde(default)]
     pub body: String,
     #[serde(default)]
-    pub compression: Compression,
-    pub archive: Option<Vec<String>>,
+    pub archive: Archive,
 }
 
 impl ReleaseConfig {
     pub fn target_branch() -> String {
         MAIN_BRANCH_NAME.to_owned()
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct Archive {
+    #[serde(default)]
+    pub compression: Compression,
+    pub files: Option<Vec<String>>,
 }

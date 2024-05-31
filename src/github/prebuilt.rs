@@ -51,7 +51,7 @@ pub async fn release(
             &name,
             path,
             &full_name,
-            &release_config.archive,
+            &release_config.archive.files,
             compression,
         )?;
 

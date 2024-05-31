@@ -37,7 +37,7 @@ pub async fn release(build: &Build, release_config: &ReleaseConfig) -> Result<Ve
         }
         crate::build::TargetType::PreBuilt => {
             log::debug!("Running prebuilt, ignoring build info");
-            prebuilt::release(build, release_config, &release_config.compression).await?
+            prebuilt::release(build, release_config, &release_config.archive.compression).await?
         }
     };
 
