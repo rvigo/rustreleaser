@@ -1,5 +1,3 @@
-use std::future::Future;
-
 use super::{asset::UploadedAsset, generate_checksum_asset};
 use crate::{
     brew::package::Package,
@@ -43,26 +41,6 @@ impl Release {
         Ok(uploaded)
     }
 
-    pub fn upload_assets_raw<'a>(
-        &'a self,
-        assets: &'a Vec<Asset>,
-        tag: &'a Tag,
-    ) -> Vec<impl Future<Output = Result<UploadedAsset>> + 'a> {
-        let mut uploaded = vec![];
-        for asset in assets {
-            let uploaded_asset = github_client::instance().upload_asset(
-                &asset,
-                &self.owner,
-                tag,
-                &self.repo,
-                self.id,
-            );
-            uploaded.push(uploaded_asset);
-        }
-
-        uploaded
-    }
-
     async fn upload_checksum_asset(&self, asset: &Asset, tag: &Tag) -> Result<()> {
         let checksum_asset = generate_checksum_asset(asset)?;
         let ua = github_client::instance()
@@ -70,20 +48,5 @@ impl Release {
             .await?;
         log::debug!("Uploaded checksum asset: {:#?}", ua);
         Ok(())
-    }
-
-    pub fn upload_checksum_asset_raw<'a>(
-        &'a self,
-        tag: &'a Tag,
-        checksum_asset: &'a Asset,
-    ) -> impl Future<Output = Result<UploadedAsset>> + 'a {
-        let ua = github_client::instance().upload_asset(
-            &checksum_asset,
-            &self.owner,
-            tag,
-            &self.repo,
-            self.id,
-        );
-        ua
     }
 }

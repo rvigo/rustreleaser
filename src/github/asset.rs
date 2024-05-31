@@ -41,7 +41,7 @@ impl UploadedAsset {
 
 pub type Assets = Vec<Asset>;
 
-impl From<&AssetMatrix> for Assets {
+impl From<&AssetMatrix<'_>> for Assets {
     fn from(value: &AssetMatrix) -> Self {
         value
             .iter()
@@ -51,7 +51,7 @@ impl From<&AssetMatrix> for Assets {
     }
 }
 
-impl From<AssetMatrix> for Assets {
+impl From<AssetMatrix<'_>> for Assets {
     fn from(value: AssetMatrix) -> Self {
         value
             .iter()
