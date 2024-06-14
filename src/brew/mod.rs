@@ -45,7 +45,7 @@ impl Brew {
             name: captalize(brew.name),
             description: captalize(brew.description),
             homepage: brew.homepage,
-            install_info: brew.install,
+            install_info: brew.install.trim().to_owned(),
             repository: brew.repository,
             version: tag.strip_v_prefix().to_owned(),
             license: brew.license,
@@ -168,50 +168,49 @@ impl From<CommitterConfig> for Committer {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::serialize;
-//     use crate::git::tag::Tag;
+#[cfg(test)]
+mod tests {
+    use super::serialize;
+    use crate::{
+        brew::{repository::Repository, Brew},
+        checksum::Checksum,
+        config::BrewConfig,
+        git::tag::Tag,
+    };
+    use tempdir::TempDir;
 
-//     #[test]
-//     fn should_serialize_tag_without_v() {
-//         let tag = Tag::new("v1.0.0");
+    #[test]
+    fn should_serialize_tag_without_v() {
+        let dir = TempDir::new("brew").unwrap();
+        let tag = Tag::new("v1.0.0");
 
-//         let brew = crate::brew::Brew::new(
-//             crate::config::BrewConfig {
-//                 name: "test".to_string(),
-//                 description: "test".to_string(),
-//                 homepage: "test".to_string(),
-//                 install: "test".to_string(),
-//                 repository: crate::brew::repository::Repository {
-//                     owner: "test".to_string(),
-//                     name: "test".to_string(),
-//                 },
-//                 license: "test".to_string(),
-//                 head: "test".to_string(),
-//                 test: "test".to_string(),
-//                 caveats: "test".to_string(),
-//                 commit_message: "test".to_string(),
-//                 commit_author: None,
-//                 pull_request: None,
-//             },
-//             tag,
-//             vec![crate::brew::package::Package {
-//                 os: Some(crate::build::os::Os::UnknownLinuxGnu),
-//                 arch: Some(crate::build::arch::Arch::Amd64),
-//                 url: "test".to_string(),
-//                 sha256: "test".to_string(),
-//                 name: "test".to_string(),
-//                 prebuilt: false,
-//             }],
-//         );
+        let brew_config = BrewConfig {
+            name: "test".to_owned(),
+            description: "test".to_owned(),
+            homepage: "test".to_owned(),
+            install: "test\n".to_owned(),
+            repository: Repository {
+                owner: "test".to_owned(),
+                name: "test".to_owned(),
+            },
+            license: "test".to_owned(),
+            head: None,
+            test: "test".to_owned(),
+            caveats: "test".to_owned(),
+            commit_message: "test".to_owned(),
+            commit_author: None,
+            pull_request: None,
+        };
 
-//         let serialized = serialize(&brew);
+        let brew = Brew::new(
+            brew_config,
+            tag,
+            Checksum::create(vec![], dir.path().join("test.txt")).unwrap(),
+            "url.com".to_owned(),
+        );
 
-//         assert!(serialized.is_ok());
+        let serialized = serialize(&brew);
 
-//         let yaml = serde_yaml::from_str::<super::Brew>(&serialized.unwrap()).unwrap();
-
-//         assert_eq!(yaml.tag.name(), "1.0.0");
-//     }
-// }
+        assert!(serialized.is_ok());
+    }
+}

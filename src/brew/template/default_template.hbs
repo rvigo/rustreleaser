@@ -24,11 +24,13 @@ class {{ name }} < Formula
     {{{ ../../install_info }}}
   end
   {{ #if caveats}}
+
   def caveats
     "{{ caveats }}"
   end
   {{ /if }}
   {{ #if test }}
+
   test do
     {{{ test }}}
   end
