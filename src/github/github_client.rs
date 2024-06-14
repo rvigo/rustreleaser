@@ -1,5 +1,6 @@
 use super::{
     dto::{pull_request_dto::PullRequestDto, release_dto::ReleaseDto},
+    macros::Headers,
     request::{
         assignees_request::AssigneesRequest, branch_ref_request::BranchRefRequest,
         create_release_request::CreateReleaseRequest, labels_request::LabelsRequest,
@@ -212,7 +213,13 @@ impl GithubClient {
     }
 
     pub async fn download_tarball(&self, url: &str) -> Result<Vec<u8>> {
-        let response = reqwest::get(url).await?.bytes().await?;
+        let response = crate::http::HttpClient::new()
+            .get(url)
+            .default_headers()
+            .send()
+            .await?
+            .bytes()
+            .await?;
 
         Ok(response.to_vec())
     }
