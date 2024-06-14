@@ -40,23 +40,10 @@ impl Release {
             _ => self.zipball_url.to_owned(),
         }
     }
+
     pub async fn download_tarball(&self, compression: &Compression) -> Result<Vec<u8>> {
-        let tarball = github_client::instance()
-            .download_tarball(&self.tarball_url(compression))
-            .await?;
+        let url = self.archive_url(compression);
+        let tarball = github_client::instance().download_tarball(&url).await?;
         Ok(tarball)
-    }
-
-    pub fn tarball_url(&self, compression: &Compression) -> String {
-        match compression {
-            Compression::TarGz => self.tarball_url.to_owned(),
-            _ => self.zipball_url.to_owned(),
-        }
-    }
-
-    pub fn tarball_name(&self, compression: &Compression) -> String {
-        let url = self.tarball_url(compression);
-        let url_parts: Vec<&str> = url.split('/').collect();
-        url_parts.last().unwrap().to_owned().to_owned()
     }
 }
