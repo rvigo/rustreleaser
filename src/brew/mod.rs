@@ -117,12 +117,17 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .await
         .context("Error creating the branch")?;
 
-    let content = fs::read_to_string(format!("{}.rb", brew.name))?;
+    let formula_name = format!("{}.rb", brew.name.to_lowercase());
+
+    let content = fs::read_to_string(&formula_name).context(format!(
+        "Cannot read the rb file with name {}",
+        formula_name
+    ))?;
 
     log::debug!("Updating formula");
     repo.branch(&pull_request.head)
         .upsert_file()
-        .path(format!("{}.rb", brew.name))
+        .path(formula_name)
         .message(brew.commit_message)
         .content(content)
         .committer(&committer)
