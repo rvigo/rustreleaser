@@ -69,12 +69,15 @@ where
 pub async fn publish(brew_config: BrewConfig, checksum: Checksum) -> Result<String> {
     let brew = Brew::new(brew_config, git::get_current_tag(cwd!())?, checksum);
 
-    let data = serialize(&brew)?;
+    let data = serialize(&brew).context("Cannot serialize the formula file")?;
 
-    write_file(format!("{}.rb", brew.name.to_lowercase()), &data)?;
+    write_file(format!("{}.rb", brew.name.to_lowercase()), &data)
+        .context("Cannot write to the formula file")?;
 
     log::debug!("Creating pull request");
-    push_formula(brew).await?;
+    push_formula(brew)
+        .await
+        .context("Cannot create the pull request for the formula")?;
     Ok(data)
 }
 
@@ -104,7 +107,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .branch(&pull_request.base)
         .get_commit_sha()
         .await
-        .context("error getting the base branch commit sha")?;
+        .context("Error getting the base branch commit sha")?;
 
     repo.branches()
         .create()
@@ -112,7 +115,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .sha(sha.sha)
         .execute()
         .await
-        .context("error creating the branch")?;
+        .context("Error creating the branch")?;
 
     let content = fs::read_to_string(format!("{}.rb", brew.name))?;
 
@@ -125,7 +128,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .committer(&committer)
         .execute()
         .await
-        .context("error uploading file to head branch")?;
+        .context("Error uploading file to head branch")?;
 
     log::debug!("Creating pull request");
     repo.pull_request()
@@ -139,7 +142,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .committer(&committer)
         .execute()
         .await
-        .context("error creating pull request")?;
+        .context("Error creating pull request")?;
 
     Ok(())
 }
