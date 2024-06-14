@@ -16,7 +16,12 @@ use crate::{
 use anyhow::Result;
 use handler::BuilderExecutor;
 
-pub async fn release(release_config: &ReleaseConfig) -> Result<Checksum> {
+pub struct ReleaseDto {
+    pub checksum: Checksum,
+    pub tarball_url: String,
+}
+
+pub async fn release(release_config: &ReleaseConfig) -> Result<ReleaseDto> {
     let tag = git::get_current_tag(cwd!())?;
 
     log::debug!("getting/creating release");
@@ -28,7 +33,11 @@ pub async fn release(release_config: &ReleaseConfig) -> Result<Checksum> {
     log::debug!("generating checksum");
     let checksum = Checksum::create(tarball, release.tarball_name(&release_config.compression))?;
 
-    Ok(checksum)
+    let dto = ReleaseDto {
+        checksum,
+        tarball_url: release.tarball_url(&release_config.compression),
+    };
+    Ok(dto)
 }
 
 async fn get_release(release_config: &ReleaseConfig, tag: &Tag) -> Result<Release> {

@@ -8,7 +8,7 @@ use crate::{
     config::Head,
     cwd,
     git::{committer::Committer, tag::Tag},
-    github::{github_client, handler::BuilderExecutor},
+    github::{github_client, handler::BuilderExecutor, ReleaseDto},
 };
 use crate::{
     config::{BrewConfig, CommitterConfig, PullRequestConfig},
@@ -36,10 +36,11 @@ pub struct Brew {
     pub pull_request: Option<PullRequestConfig>,
     #[serde(serialize_with = "serialize_checksum")]
     pub tarball_checksum: Checksum,
+    pub url: String,
 }
 
 impl Brew {
-    pub fn new(brew: BrewConfig, tag: Tag, checksum: Checksum) -> Brew {
+    pub fn new(brew: BrewConfig, tag: Tag, checksum: Checksum, tarball_url: String) -> Brew {
         Brew {
             name: captalize(brew.name),
             description: captalize(brew.description),
@@ -55,6 +56,7 @@ impl Brew {
             commit_author: brew.commit_author,
             pull_request: brew.pull_request,
             tarball_checksum: checksum,
+            url: tarball_url,
         }
     }
 }
@@ -66,8 +68,13 @@ where
     serializer.serialize_str(checksum.value())
 }
 
-pub async fn publish(brew_config: BrewConfig, checksum: Checksum) -> Result<String> {
-    let brew = Brew::new(brew_config, git::get_current_tag(cwd!())?, checksum);
+pub async fn publish(brew_config: BrewConfig, dto: ReleaseDto) -> Result<String> {
+    let brew = Brew::new(
+        brew_config,
+        git::get_current_tag(cwd!())?,
+        dto.checksum,
+        dto.tarball_url,
+    );
 
     let data = serialize(&brew).context("Cannot serialize the formula file")?;
 

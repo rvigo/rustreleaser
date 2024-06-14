@@ -37,7 +37,7 @@ impl Release {
         Ok(tarball)
     }
 
-    fn tarball_url(&self, compression: &Compression) -> String {
+    pub fn tarball_url(&self, compression: &Compression) -> String {
         match compression {
             Compression::TarGz => self.tarball_url.to_owned(),
             _ => self.zipball_url.to_owned(),
