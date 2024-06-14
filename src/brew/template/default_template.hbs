@@ -11,7 +11,7 @@ class {{ name }} < Formula
   homepage "{{ homepage }}"
   {{ /if }}
   url "{{ url }}"
-  version "{{ version }}"
+  {{!-- version "{{ version }}" --}}
   sha256 "{{ tarball_checksum }}"
   {{ #if license }}
   license "{{ license }}"
