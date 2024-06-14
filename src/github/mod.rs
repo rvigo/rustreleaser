@@ -15,6 +15,7 @@ use crate::{
 };
 use anyhow::Result;
 use handler::BuilderExecutor;
+use std::io::Cursor;
 
 pub struct ReleaseDto {
     pub checksum: Checksum,
@@ -31,7 +32,7 @@ pub async fn release(release_config: &ReleaseConfig) -> Result<ReleaseDto> {
         .download_tarball(&release_config.compression)
         .await?;
     log::debug!("generating checksum");
-    let checksum = Checksum::create(tarball, release.tarball_name(&release_config.compression))?;
+    let checksum = Checksum::create(Cursor::new(tarball))?;
 
     let dto = ReleaseDto {
         checksum,

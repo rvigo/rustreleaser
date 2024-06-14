@@ -177,11 +177,10 @@ mod tests {
         config::BrewConfig,
         git::tag::Tag,
     };
-    use tempdir::TempDir;
+    use std::io::Cursor;
 
     #[test]
     fn should_serialize_tag_without_v() {
-        let dir = TempDir::new("brew").unwrap();
         let tag = Tag::new("v1.0.0");
 
         let brew_config = BrewConfig {
@@ -202,10 +201,11 @@ mod tests {
             pull_request: None,
         };
 
+        let cursor = Cursor::new(b"Hello, world!");
         let brew = Brew::new(
             brew_config,
             tag,
-            Checksum::create(vec![], dir.path().join("test.txt")).unwrap(),
+            Checksum::create(cursor).unwrap(),
             "url.com".to_owned(),
         );
 
