@@ -29,7 +29,17 @@ impl Release {
             zipball_url: zipball_url.into(),
         }
     }
-
+    pub fn archive_url(&self, compression: &Compression) -> String {
+        match compression {
+            Compression::TarGz => {
+                format!(
+                    "https://github.com/{}/{}/archive/refs/tags/{}.tar.gz",
+                    self.owner, self.repo, self.name
+                )
+            }
+            _ => self.zipball_url.to_owned(),
+        }
+    }
     pub async fn download_tarball(&self, compression: &Compression) -> Result<Vec<u8>> {
         let tarball = github_client::instance()
             .download_tarball(&self.tarball_url(compression))

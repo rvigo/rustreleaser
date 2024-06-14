@@ -35,7 +35,7 @@ pub async fn release(release_config: &ReleaseConfig) -> Result<ReleaseDto> {
 
     let dto = ReleaseDto {
         checksum,
-        tarball_url: release.tarball_url(&release_config.compression),
+        tarball_url: release.archive_url(&release_config.compression),
     };
     Ok(dto)
 }
