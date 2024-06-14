@@ -19,19 +19,18 @@ class {{ name }} < Formula
   {{ #if head }}
   head "{{ head.url }}"{{ #if head.branch }}, branch: "{{ head.branch }}"{{ /if }}
   {{ /if }}
-  {{ #if bottle }}
-  {{ /if }}
+
   def install
-     {{{ ../../install_info }}}
+    {{{ ../../install_info }}}
   end
   {{ #if caveats}}
   def caveats
-      "{{ caveats }}"
+    "{{ caveats }}"
   end
   {{ /if }}
   {{ #if test }}
   test do
-      {{{ test }}}
+    {{{ test }}}
   end
   {{ /if }}
 end
