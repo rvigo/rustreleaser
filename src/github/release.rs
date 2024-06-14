@@ -1,6 +1,5 @@
 use crate::{compression::Compression, github::github_client};
 use anyhow::Result;
-use std::fs::File;
 
 #[derive(Debug, Clone)]
 pub struct Release {
@@ -31,9 +30,9 @@ impl Release {
         }
     }
 
-    pub async fn download_tarball(&self, compression: &Compression) -> Result<File> {
+    pub async fn download_tarball(&self, compression: &Compression) -> Result<Vec<u8>> {
         let tarball = github_client::instance()
-            .download_tarball(&self.tarball_url(compression), &self.name)
+            .download_tarball(&self.tarball_url(compression))
             .await?;
         Ok(tarball)
     }
@@ -43,5 +42,11 @@ impl Release {
             Compression::TarGz => self.tarball_url.to_owned(),
             _ => self.zipball_url.to_owned(),
         }
+    }
+
+    pub fn tarball_name(&self, compression: &Compression) -> String {
+        let url = self.tarball_url(compression);
+        let url_parts: Vec<&str> = url.split('/').collect();
+        url_parts.last().unwrap().to_owned().to_owned()
     }
 }

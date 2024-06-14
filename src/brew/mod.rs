@@ -66,10 +66,6 @@ where
     serializer.serialize_str(checksum.value())
 }
 
-fn head_as_string(head: &Head) -> String {
-    format!("{}, branch: {}", head.url, head.branch)
-}
-
 pub async fn publish(brew_config: BrewConfig, checksum: Checksum) -> Result<String> {
     let brew = Brew::new(brew_config, git::get_current_tag(cwd!())?, checksum);
 

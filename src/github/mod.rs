@@ -25,9 +25,8 @@ pub async fn release(release_config: &ReleaseConfig) -> Result<Checksum> {
     let tarball = release
         .download_tarball(&release_config.compression)
         .await?;
-
     log::debug!("generating checksum");
-    let checksum = Checksum::create(&tarball)?;
+    let checksum = Checksum::create(tarball, release.tarball_name(&release_config.compression))?;
 
     Ok(checksum)
 }

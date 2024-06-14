@@ -21,8 +21,7 @@ use crate::{
 use anyhow::{Context, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use once_cell::sync::Lazy;
-use std::{env, io::Cursor};
-use tokio::fs::File;
+use std::env;
 
 pub static GITHUB_TOKEN: Lazy<String> =
     Lazy::new(|| env::var("GITHUB_TOKEN").expect("GITHUB_TOKEN must be set"));
@@ -212,14 +211,10 @@ impl GithubClient {
         ))
     }
 
-    pub async fn download_tarball(&self, url: &str, release_name: &str) -> Result<std::fs::File> {
-        let response = reqwest::get(url).await?;
-        let file = File::create(release_name).await?;
-        let mut content = Cursor::new(response.bytes().await?);
-        let mut std_file = file.try_into_std().unwrap();
-        std::io::copy(&mut content, &mut std_file)?;
+    pub async fn download_tarball(&self, url: &str) -> Result<Vec<u8>> {
+        let response = reqwest::get(url).await?.bytes().await?;
 
-        Ok(std_file)
+        Ok(response.to_vec())
     }
 
     pub(super) async fn get_release_by_tag(
