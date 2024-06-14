@@ -1,4 +1,4 @@
-use crate::{brew::repository::Repository, build::Build, compression::Compression};
+use crate::{brew::repository::Repository, compression::Compression};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -10,10 +10,9 @@ const PR_DEFAULT_HEAD_BRANCH_NAME: &str = "bumps-formula-version";
 
 const DEFAULT_CONFIG_FILE_NAME: &str = "rustreleaser.yaml";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Config {
-    pub build: Build,
-    pub brew: Option<BrewConfig>,
+    pub brew: BrewConfig,
     pub release: ReleaseConfig,
 }
 
@@ -27,7 +26,7 @@ impl Config {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct BrewConfig {
     pub name: String,
     #[serde(default)]
@@ -37,8 +36,7 @@ pub struct BrewConfig {
     pub install: String,
     #[serde(default)]
     pub license: String,
-    #[serde(default = "BrewConfig::main_branch_name")]
-    pub head: String,
+    pub head: Option<Head>,
     #[serde(default)]
     pub test: String,
     #[serde(default)]
@@ -50,11 +48,13 @@ pub struct BrewConfig {
     pub repository: Repository,
 }
 
-impl BrewConfig {
-    fn main_branch_name() -> String {
-        MAIN_BRANCH_NAME.to_owned()
-    }
+#[derive(Serialize, Deserialize)]
+pub struct Head {
+    pub url: String,
+    pub branch: String,
+}
 
+impl BrewConfig {
     fn default_commit_message() -> String {
         BREW_DEFAULT_COMMIT_MESSAGE.to_owned()
     }
@@ -80,6 +80,20 @@ pub struct PullRequestConfig {
     pub head: String,
 }
 
+impl Default for PullRequestConfig {
+    fn default() -> Self {
+        PullRequestConfig {
+            title: Some("Bump formula version".to_owned()),
+            body: None,
+            labels: None,
+            assignees: None,
+            draft: false,
+            base: PullRequestConfig::default_base_branch_name(),
+            head: PullRequestConfig::default_head_branch_name(),
+        }
+    }
+}
+
 impl PullRequestConfig {
     fn default_base_branch_name() -> String {
         PR_DEFAULT_BASE_BRANCH_NAME.to_owned()
@@ -90,7 +104,7 @@ impl PullRequestConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ReleaseConfig {
     pub owner: String,
     pub repo: String,
@@ -104,18 +118,11 @@ pub struct ReleaseConfig {
     #[serde(default)]
     pub body: String,
     #[serde(default)]
-    pub archive: Archive,
+    pub compression: Compression,
 }
 
 impl ReleaseConfig {
     pub fn target_branch() -> String {
         MAIN_BRANCH_NAME.to_owned()
     }
-}
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct Archive {
-    #[serde(default)]
-    pub compression: Compression,
-    pub files: Option<Vec<String>>,
 }

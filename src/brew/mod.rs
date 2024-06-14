@@ -1,63 +1,52 @@
-pub mod package;
 pub mod repository;
-pub mod target;
 mod template;
 
-use self::{
-    package::Package,
-    repository::Repository,
-    target::{MultiTarget, SingleTarget, Target, Targets},
-};
+use self::repository::Repository;
 use crate::{
     brew::template::handlebars,
+    checksum::Checksum,
+    config::Head,
     cwd,
     git::{committer::Committer, tag::Tag},
     github::{github_client, handler::BuilderExecutor},
 };
 use crate::{
-    build::arch::Arch,
     config::{BrewConfig, CommitterConfig, PullRequestConfig},
     git,
 };
 use anyhow::{Context, Result};
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fs;
-use template::Template;
+use template::FORMULA_FILE_TEMPLATE;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct Brew {
     pub name: String,
     pub description: String,
     pub homepage: String,
     pub license: String,
-    pub head: String,
+    pub head: Option<Head>,
     pub test: String,
     pub caveats: String,
     pub commit_message: String,
     pub commit_author: Option<CommitterConfig>,
     pub install_info: String,
     pub repository: Repository,
-    #[serde(flatten)]
-    #[serde(rename(serialize = "version"))]
-    pub tag: Tag,
+    pub version: String,
     pub pull_request: Option<PullRequestConfig>,
-    pub targets: Targets,
-    pub template: Template,
+    #[serde(serialize_with = "serialize_checksum")]
+    pub tarball_checksum: Checksum,
 }
 
 impl Brew {
-    pub fn new(brew: BrewConfig, version: Tag, packages: Vec<Package>) -> Brew {
-        let targets = Targets::from(packages);
-        let template = Template::from(&targets);
+    pub fn new(brew: BrewConfig, tag: Tag, checksum: Checksum) -> Brew {
         Brew {
             name: captalize(brew.name),
-            description: brew.description,
+            description: captalize(brew.description),
             homepage: brew.homepage,
             install_info: brew.install,
             repository: brew.repository,
-            tag: version,
-            targets,
+            version: tag.strip_v_prefix().to_owned(),
             license: brew.license,
             head: brew.head,
             test: brew.test,
@@ -65,61 +54,37 @@ impl Brew {
             commit_message: brew.commit_message,
             commit_author: brew.commit_author,
             pull_request: brew.pull_request,
-            template,
+            tarball_checksum: checksum,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BrewArch {
-    pub arch: Arch,
-    pub url: String,
-    pub hash: String,
+fn serialize_checksum<S>(checksum: &Checksum, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(checksum.value())
 }
 
-impl BrewArch {
-    pub fn new(arch: Arch, url: impl Into<String>, hash: impl Into<String>) -> Self {
-        Self {
-            arch,
-            url: url.into(),
-            hash: hash.into(),
-        }
-    }
+fn head_as_string(head: &Head) -> String {
+    format!("{}, branch: {}", head.url, head.branch)
 }
 
-pub async fn publish(brew_config: BrewConfig, packages: Vec<Package>) -> Result<String> {
-    log::debug!("packages: {:?}", packages);
-
-    let brew = Brew::new(brew_config, git::get_current_tag(cwd!())?, packages);
-    log::debug!("Rendering Formula template {}", brew.template.to_string());
+pub async fn publish(brew_config: BrewConfig, checksum: Checksum) -> Result<String> {
+    let brew = Brew::new(brew_config, git::get_current_tag(cwd!())?, checksum);
 
     let data = serialize(&brew)?;
 
     write_file(format!("{}.rb", brew.name.to_lowercase()), &data)?;
 
-    if brew.pull_request.is_some() {
-        log::debug!("Creating pull request");
-        push_formula(brew).await?;
-    } else {
-        log::debug!("Committing file to head branch");
-        github_client::instance()
-            .repo(&brew.repository.owner, &brew.repository.name)
-            .branch(&brew.head)
-            .upsert_file()
-            .path(format!("{}.rb", brew.name.to_lowercase()))
-            .message(brew.commit_message)
-            .content(&data)
-            .execute()
-            .await
-            .context("error uploading file to main branch")?;
-    }
-
+    log::debug!("Creating pull request");
+    push_formula(brew).await?;
     Ok(data)
 }
 
 fn serialize(brew: &Brew) -> Result<String> {
     let hb = handlebars()?;
-    let rendered = hb.render(&brew.template.to_string(), brew)?;
+    let rendered = hb.render(FORMULA_FILE_TEMPLATE, brew)?;
     Ok(rendered)
 }
 
@@ -133,7 +98,7 @@ fn captalize(mut string: String) -> String {
 }
 
 async fn push_formula(brew: Brew) -> Result<()> {
-    let pull_request = brew.pull_request.unwrap();
+    let pull_request = brew.pull_request.unwrap_or_default();
 
     let committer = brew.commit_author.map(Committer::from).unwrap_or_default();
     let repo = github_client::instance().repo(&brew.repository.owner, &brew.repository.name);
@@ -183,39 +148,6 @@ async fn push_formula(brew: Brew) -> Result<()> {
     Ok(())
 }
 
-impl From<Vec<Package>> for Targets {
-    fn from(value: Vec<Package>) -> Targets {
-        let targets: Vec<Target> = if value.is_empty() {
-            vec![]
-        } else if value.len() == 1 {
-            let target = vec![Target::Single(SingleTarget::new(
-                &value[0].url,
-                &value[0].sha256,
-            ))];
-            target
-        } else {
-            let group = value
-                .iter()
-                .cloned()
-                .group_by(|p| p.os.to_owned())
-                .into_iter()
-                .map(|g| MultiTarget {
-                    os: g.0.unwrap(),
-                    archs: g
-                        .1
-                        .map(|p| BrewArch::new(p.arch.unwrap(), p.url, p.sha256))
-                        .collect(),
-                })
-                .map(Target::Multi)
-                .collect();
-
-            group
-        };
-
-        Targets(targets)
-    }
-}
-
 impl From<CommitterConfig> for Committer {
     fn from(value: CommitterConfig) -> Self {
         Committer {
@@ -224,3 +156,51 @@ impl From<CommitterConfig> for Committer {
         }
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::serialize;
+//     use crate::git::tag::Tag;
+
+//     #[test]
+//     fn should_serialize_tag_without_v() {
+//         let tag = Tag::new("v1.0.0");
+
+//         let brew = crate::brew::Brew::new(
+//             crate::config::BrewConfig {
+//                 name: "test".to_string(),
+//                 description: "test".to_string(),
+//                 homepage: "test".to_string(),
+//                 install: "test".to_string(),
+//                 repository: crate::brew::repository::Repository {
+//                     owner: "test".to_string(),
+//                     name: "test".to_string(),
+//                 },
+//                 license: "test".to_string(),
+//                 head: "test".to_string(),
+//                 test: "test".to_string(),
+//                 caveats: "test".to_string(),
+//                 commit_message: "test".to_string(),
+//                 commit_author: None,
+//                 pull_request: None,
+//             },
+//             tag,
+//             vec![crate::brew::package::Package {
+//                 os: Some(crate::build::os::Os::UnknownLinuxGnu),
+//                 arch: Some(crate::build::arch::Arch::Amd64),
+//                 url: "test".to_string(),
+//                 sha256: "test".to_string(),
+//                 name: "test".to_string(),
+//                 prebuilt: false,
+//             }],
+//         );
+
+//         let serialized = serialize(&brew);
+
+//         assert!(serialized.is_ok());
+
+//         let yaml = serde_yaml::from_str::<super::Brew>(&serialized.unwrap()).unwrap();
+
+//         assert_eq!(yaml.tag.name(), "1.0.0");
+//     }
+// }

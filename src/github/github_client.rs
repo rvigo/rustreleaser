@@ -13,18 +13,16 @@ use crate::{
     get,
     git::tag::Tag,
     github::{
-        asset::{Asset, UploadedAsset},
-        dto::commit_info_dto::CommitInfoDto,
-        release::Release,
+        dto::commit_info_dto::CommitInfoDto, release::Release,
         request::upsert_file_request::UpsertFileRequest,
     },
-    post, put, upload_file,
+    post, put,
 };
 use anyhow::{Context, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use once_cell::sync::Lazy;
-use std::env;
-use tokio::{fs::File, io::AsyncReadExt};
+use std::{env, io::Cursor};
+use tokio::fs::File;
 
 pub static GITHUB_TOKEN: Lazy<String> =
     Lazy::new(|| env::var("GITHUB_TOKEN").expect("GITHUB_TOKEN must be set"));
@@ -35,52 +33,12 @@ pub fn instance() -> &'static GithubClient {
     &CLIENT
 }
 
-const GITHUB_DEFAULT_URL: &str = "https://github.com";
 const GITHUB_API_REPO_URL: &str = "https://api.github.com/repos";
-const GITHUB_API_UPLOAD_URL: &str = "https://uploads.github.com/repos";
 
 pub struct GithubClient;
 
 /// Github client api internal implementation
 impl GithubClient {
-    pub(super) async fn upload_asset(
-        &self,
-        asset: &Asset,
-        owner: impl Into<String>,
-        tag: &Tag,
-        repo: impl Into<String>,
-        release_id: u64,
-    ) -> Result<UploadedAsset> {
-        let mut file = File::open(&asset.path).await?;
-        let mut content = vec![];
-
-        file.read_to_end(&mut content).await?;
-
-        let owner = owner.into();
-        let repo = repo.into();
-
-        let uri = format!(
-            "{}/{}/{}/releases/{}/assets?name={}",
-            GITHUB_API_UPLOAD_URL, &owner, &repo, release_id, asset.name
-        );
-
-        upload_file!(uri, content)?;
-
-        let asset_url = format!(
-            "{}/{}/{}/releases/download/v{}/{}",
-            GITHUB_DEFAULT_URL,
-            &owner,
-            &repo,
-            tag.strip_v_prefix(),
-            asset.name
-        );
-        log::debug!("creating uploaded asset for {}", asset.name);
-        let uploaded_asset = self.create_uploaded_asset(asset, asset_url);
-        log::debug!("uploaded asset created: {:#?}", uploaded_asset);
-
-        Ok(uploaded_asset)
-    }
-
     pub(super) async fn get_commit_sha(
         &self,
         owner: impl Into<String>,
@@ -248,7 +206,20 @@ impl GithubClient {
             release.id,
             release_dto.owner,
             release_dto.repo,
+            release.name,
+            release.tarball_url,
+            release.zipball_url,
         ))
+    }
+
+    pub async fn download_tarball(&self, url: &str, release_name: &str) -> Result<std::fs::File> {
+        let response = reqwest::get(url).await?;
+        let file = File::create(release_name).await?;
+        let mut content = Cursor::new(response.bytes().await?);
+        let mut std_file = file.try_into_std().unwrap();
+        std::io::copy(&mut content, &mut std_file)?;
+
+        Ok(std_file)
     }
 
     pub(super) async fn get_release_by_tag(
@@ -268,7 +239,14 @@ impl GithubClient {
         let response = get!(&uri)?;
         let release = serde_json::from_str::<ReleaseResponse>(&response)?;
 
-        Ok(Release::new(release.id, owner, repo))
+        Ok(Release::new(
+            release.id,
+            owner,
+            repo,
+            release.name,
+            release.tarball_url,
+            release.zipball_url,
+        ))
     }
 
     async fn set_pr_assignees(
@@ -317,17 +295,5 @@ impl GithubClient {
         post!(&uri, body)?;
 
         Ok(())
-    }
-
-    fn create_uploaded_asset(&self, asset: &Asset, url: impl Into<String>) -> UploadedAsset {
-        UploadedAsset::new(
-            asset.name.to_owned(),
-            url.into(),
-            asset
-                .checksum
-                .as_ref()
-                .unwrap_or(&String::default())
-                .to_owned(),
-        )
     }
 }

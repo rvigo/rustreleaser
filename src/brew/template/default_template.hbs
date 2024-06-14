@@ -10,12 +10,17 @@ class {{ name }} < Formula
     {{ #if homepage }}
     homepage "{{ homepage }}"
     {{ /if }}
+    url "{{ url }}"
+    sha256 "{{ tarball_checksum }}"
     version "{{ version }}"
     {{ #if license }}
     license "{{ license }}"
     {{ /if }}
-    url "{{ targets.0.Single.url }}"
-    sha256 "{{ targets.0.Single.hash }}"
+    {{ #if head }}
+    head "{{ head.url }}"{{ #if head.branch }}, branch: "{{ head.branch }}" {{ /if }}
+    {{ /if }}
+    {{ #if bottle }}
+    {{ /if }}
 
     def install
        {{{ ../../install_info }}}
