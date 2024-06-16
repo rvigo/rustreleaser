@@ -28,7 +28,13 @@ fn one_or_many_helper(
     _: &mut RenderContext,
     out: &mut dyn Output,
 ) -> Result<(), RenderError> {
-    let param = h.param(0).and_then(|v| v.value().as_array()).expect("erro");
+    let param = h.param(0).and_then(|v| v.value().as_array()).ok_or(
+        RenderErrorReason::ParamTypeMismatchForName(
+            "symbol",
+            "symbol".to_owned(),
+            "str".to_owned(),
+        ),
+    )?;
 
     if param.len() == 1 {
         let single = &param[0];
