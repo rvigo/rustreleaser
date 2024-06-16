@@ -1,10 +1,7 @@
 mod dto;
 pub mod github_client;
 pub mod handler;
-mod macros;
 mod release;
-mod request;
-mod response;
 
 use self::release::Release;
 use crate::{

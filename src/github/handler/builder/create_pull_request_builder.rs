@@ -1,10 +1,8 @@
 use super::BuilderExecutor;
 use crate::{
     git::committer::Committer,
-    github::{
-        dto::pull_request_dto::PullRequestDto, github_client,
-        response::pull_request_response::PullRequest,
-    },
+    github::{dto::pull_request_dto::PullRequestDto, github_client},
+    http::response::PullRequest,
 };
 
 pub struct CreatePullRequestBuilder {
@@ -17,6 +15,7 @@ pub struct CreatePullRequestBuilder {
     pub committer: Option<Committer>,
     pub base: String,
     pub head: String,
+    pub overwrite: bool,
 }
 
 impl CreatePullRequestBuilder {
@@ -31,6 +30,7 @@ impl CreatePullRequestBuilder {
             committer: None,
             base: String::new(),
             head: String::new(),
+            overwrite: false,
         }
     }
 
@@ -68,6 +68,11 @@ impl CreatePullRequestBuilder {
         self.head = head.into();
         self
     }
+
+    pub fn overwrite(mut self, overwrite: bool) -> Self {
+        self.overwrite = overwrite;
+        self
+    }
 }
 
 impl BuilderExecutor for CreatePullRequestBuilder {
@@ -83,6 +88,7 @@ impl BuilderExecutor for CreatePullRequestBuilder {
             self.body.unwrap_or_default(),
             self.assignees.unwrap_or_default(),
             self.labels.unwrap_or_default(),
+            self.overwrite,
         );
 
         github_client::instance().create_pull_request(pr).await

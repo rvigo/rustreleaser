@@ -7,10 +7,10 @@ pub struct BranchRefRequest {
 }
 
 impl BranchRefRequest {
-    pub fn new(r#ref: String, sha: String) -> Self {
+    pub fn new(r#ref: impl Into<String>, sha: impl Into<String>) -> Self {
         Self {
-            r#ref: format!("refs/heads/{}", r#ref),
-            sha,
+            r#ref: format!("refs/heads/{}", r#ref.into()),
+            sha: sha.into(),
         }
     }
 }

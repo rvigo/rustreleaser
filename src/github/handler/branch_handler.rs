@@ -1,6 +1,6 @@
-use crate::github::{
-    github_client, handler::builder::upsert_file_builder::UpsertFileBuilder,
-    response::sha_response::Sha,
+use crate::{
+    github::{github_client, handler::builder::upsert_file_builder::UpsertFileBuilder},
+    http::response::CommitShaResponse,
 };
 use anyhow::Result;
 
@@ -27,7 +27,7 @@ impl BranchHandler {
         UpsertFileBuilder::new(&self.owner, &self.repo, &self.base)
     }
 
-    pub async fn get_commit_sha(&self) -> Result<Sha> {
+    pub async fn get_commit_sha(&self) -> Result<CommitShaResponse> {
         github_client::instance()
             .get_commit_sha(&self.owner, &self.repo, &self.base)
             .await

@@ -163,10 +163,10 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .labels(pull_request.labels.unwrap_or_default())
         .title(pull_request.title.unwrap_or_default())
         .committer(&committer)
+        .overwrite(false) // TODO implement
         .execute()
         .await
         .context("Error creating pull request")?;
-
     Ok(())
 }
 

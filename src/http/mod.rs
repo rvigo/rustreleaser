@@ -1,9 +1,15 @@
-pub mod error_response;
+pub mod request;
+pub mod response;
 
-use self::error_response::ErrorResponse;
-use anyhow::Result;
 use reqwest::Client;
+use reqwest::{
+    header::{ACCEPT, USER_AGENT},
+    RequestBuilder,
+};
 use std::ops::{Deref, DerefMut};
+use thiserror::Error;
+
+use crate::github::github_client::GITHUB_TOKEN;
 
 pub struct HttpClient {
     client: Client,
@@ -31,36 +37,31 @@ impl DerefMut for HttpClient {
     }
 }
 
-pub trait ResponseHandler {
-    async fn handle(self) -> Result<String, ErrorResponse>;
+pub trait Headers {
+    fn default_headers(self) -> RequestBuilder;
 }
 
-impl ResponseHandler for Result<reqwest::Response, reqwest::Error> {
-    async fn handle(self) -> Result<String, ErrorResponse> {
-        match self {
-            Ok(response) => {
-                let status = response.status();
-                let message = response
-                    .text()
-                    .await
-                    .map_err(|e| ErrorResponse::new(e.to_string(), status.as_u16()))?;
-                log::debug!("Response status: {}", status);
-
-                if status.is_success() {
-                    Ok(message)
-                } else {
-                    log::warn!("Response message: {}", message);
-                    Ok(message)
-                }
-            }
-
-            Err(error) => Err(ErrorResponse::internal_server_error(
-                if error.to_string().is_empty() {
-                    None
-                } else {
-                    Some(error.to_string())
-                },
-            )),
-        }
+impl Headers for RequestBuilder {
+    fn default_headers(self) -> RequestBuilder {
+        self.bearer_auth(GITHUB_TOKEN.to_string())
+            .header(ACCEPT, "application/vnd.github.VERSION.sha")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header(USER_AGENT, "rustreleaser")
     }
+}
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("{message}")]
+    GenericResponseError { message: String },
+    #[error("Failed to read response text")]
+    ReadResponseTextError {
+        #[source]
+        cause: reqwest::Error,
+    },
+    #[error("Failed to parse response")]
+    ParseResponseError {
+        #[source]
+        cause: serde_json::Error,
+    },
 }

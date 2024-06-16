@@ -7,6 +7,7 @@ pub struct PullRequestDto {
     pub pr_body: String,
     pub assignees: Vec<String>,
     pub labels: Vec<String>,
+    pub overwrite: bool,
 }
 
 impl PullRequestDto {
@@ -20,6 +21,7 @@ impl PullRequestDto {
         pr_body: impl Into<String>,
         assignees: Vec<String>,
         labels: Vec<String>,
+        overwrite: bool,
     ) -> Self {
         PullRequestDto {
             owner: owner.into(),
@@ -30,6 +32,7 @@ impl PullRequestDto {
             pr_body: pr_body.into(),
             assignees,
             labels,
+            overwrite,
         }
     }
 }

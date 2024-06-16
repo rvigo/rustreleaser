@@ -1,26 +1,23 @@
-use super::{
-    dto::{pull_request_dto::PullRequestDto, release_dto::ReleaseDto},
-    request::{
-        assignees_request::AssigneesRequest, branch_ref_request::BranchRefRequest,
-        create_release_request::CreateReleaseRequest, labels_request::LabelsRequest,
-        pull_request_request::PullRequestRequest,
-    },
-    response::{
-        pull_request_response::PullRequest, release_response::ReleaseResponse, sha_response::Sha,
-    },
-};
+use super::dto::{pull_request_dto::PullRequestDto, release_dto::ReleaseDto};
 use crate::{
-    get, get_bytes,
     git::tag::Tag,
-    github::{
-        dto::commit_info_dto::CommitInfoDto, release::Release,
-        request::upsert_file_request::UpsertFileRequest,
+    github::{dto::commit_info_dto::CommitInfoDto, release::Release},
+    http::{
+        request::{
+            AssigneesRequest, BranchRefRequest, CreateReleaseRequest, LabelsRequest,
+            PullRequestRequest, SerializeRequest, UpsertFileRequest,
+        },
+        response::{
+            AsyncFrom, Bytes, CommitShaResponse, FileShaResponse, Json, PullRequest, Raw,
+            ReleaseResponse, Response, UpsertFileResponse,
+        },
+        Error, Headers, HttpClient,
     },
-    post, put,
 };
 use anyhow::{Context, Result};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use once_cell::sync::Lazy;
+use reqwest::header::CONTENT_TYPE;
 use std::env;
 
 pub static GITHUB_TOKEN: Lazy<String> =
@@ -43,7 +40,7 @@ impl GithubClient {
         owner: impl Into<String>,
         repo: impl Into<String>,
         base: impl Into<String>,
-    ) -> Result<Sha> {
+    ) -> Result<CommitShaResponse> {
         let owner = owner.into();
         let repo = repo.into();
         let base = base.into();
@@ -53,10 +50,12 @@ impl GithubClient {
             GITHUB_API_REPO_URL, &owner, &repo, &base
         );
 
-        let response = get!(&uri)?;
+        let response = HttpClient::new().get(&uri).default_headers().send().await?;
+        let response = Response::<Raw, String>::async_from(response).await;
 
-        let sha = Sha { sha: response };
-
+        let sha = CommitShaResponse {
+            sha: response.collect().map_err(Error::from)?,
+        };
         Ok(sha)
     }
 
@@ -69,11 +68,18 @@ impl GithubClient {
     ) -> Result<()> {
         let uri = format!("{}/{}/{}/git/refs", GITHUB_API_REPO_URL, owner, repo);
 
-        let request = BranchRefRequest::new(branch.to_string(), sha.to_string());
+        let request = BranchRefRequest::new(branch, sha).into_request()?;
+        let response = HttpClient::new()
+            .post(&uri)
+            .default_headers()
+            .body(request)
+            .send()
+            .await?;
+        let response = Response::<Raw, String>::async_from(response).await;
 
-        let body: String = serde_json::to_string(&request)?;
-
-        post!(&uri, body)?;
+        if let Some(error) = response.err() {
+            log::debug!("Error creating branch: {}", error.message);
+        }
 
         Ok(())
     }
@@ -94,43 +100,51 @@ impl GithubClient {
             "{}/{}/{}/contents/{}",
             GITHUB_API_REPO_URL, owner, repo, path
         );
+        log::debug!("Getting file sha");
+        let response = HttpClient::new().get(uri).default_headers().send().await?;
+        let response = Response::<Json, FileShaResponse>::async_from(response).await;
 
-        let file_sha = get!(uri).context("failed to get Formula sha value")?;
-
-        let sha = serde_json::from_str::<Sha>(&file_sha).unwrap_or_default();
+        let sha = response.collect().unwrap_or_default();
 
         let body = if sha.sha.is_empty() {
-            log::debug!("creating new file");
+            log::debug!("sha is empyt, creating new file");
 
-            let request = UpsertFileRequest::new(
+            UpsertFileRequest::new(
                 &commit_info.message,
                 content,
                 Some(head),
                 None,
                 commit_info.committer.to_owned().into(),
-            );
-
-            serde_json::to_string(&request)?
+            )
         } else {
-            log::debug!("updating file");
-
-            let request = UpsertFileRequest::new(
+            log::debug!("found sha, updating file");
+            log::debug!("remote sha: {}", sha.sha);
+            UpsertFileRequest::new(
                 &commit_info.message,
                 content,
                 Some(head),
                 Some(sha.sha),
                 commit_info.committer.to_owned().into(),
-            );
-
-            serde_json::to_string(&request)?
+            )
         };
 
+        let body = body.into_request()?;
         let uri = format!(
             "{}/{}/{}/contents/{}",
             GITHUB_API_REPO_URL, owner, repo, path
         );
 
-        put!(uri, body)?;
+        let response = HttpClient::new()
+            .put(&uri)
+            .default_headers()
+            .header(CONTENT_TYPE, "application/octet-stream")
+            .body(body)
+            .send()
+            .await
+            .context("error commiting the file")?;
+
+        let response = Response::<Json, UpsertFileResponse>::async_from(response).await;
+        response.collect()?;
 
         Ok(())
     }
@@ -150,12 +164,20 @@ impl GithubClient {
             pull_request.head,
             pull_request.base,
             pull_request.pr_body,
-        );
-        let body: String = serde_json::to_string(&request)?;
+        )
+        .into_request()?;
+        let response = HttpClient::new()
+            .post(uri)
+            .default_headers()
+            .body(request)
+            .send()
+            .await?;
 
-        let response = post!(&uri, body)?;
+        let response = Response::<Json, PullRequest>::async_from(response).await;
 
-        let pr: PullRequest = serde_json::from_str(&response)?;
+        let pr: PullRequest = response
+            .collect()
+            .context("Cannot collect json from `Create Pull Request` response")?;
 
         if !pull_request.assignees.is_empty() {
             self.set_pr_assignees(
@@ -193,13 +215,19 @@ impl GithubClient {
             release_dto.body,
             release_dto.draft,
             release_dto.prerelease,
-        );
+        )
+        .into_request()?;
+        let response = HttpClient::new()
+            .post(uri)
+            .default_headers()
+            .body(request)
+            .send()
+            .await?;
+        let response = Response::<Json, ReleaseResponse>::async_from(response).await;
 
-        let body: String = serde_json::to_string(&request)?;
-
-        let response = post!(&uri, body)?;
-
-        let release = serde_json::from_str::<ReleaseResponse>(&response)?;
+        let release: ReleaseResponse = response
+            .collect()
+            .context("Cannot collect json from `Create Release` response")?;
 
         Ok(Release::new(
             release.id,
@@ -212,10 +240,12 @@ impl GithubClient {
         ))
     }
 
-    pub async fn download_tarball(&self, url: &str) -> Result<Vec<u8>> {
-        let response = get_bytes!(url)?;
+    pub(super) async fn download_tarball(&self, url: &str) -> Result<Vec<u8>> {
+        let response = HttpClient::new().get(url).default_headers().send().await?;
 
-        Ok(response.to_vec())
+        let response = Response::<Bytes, Vec<u8>>::async_from(response).await;
+        let bytes = response.collect_bytes()?;
+        Ok(bytes.to_vec())
     }
 
     pub(super) async fn get_release_by_tag(
@@ -232,8 +262,12 @@ impl GithubClient {
             tag.name()
         );
 
-        let response = get!(&uri)?;
-        let release = serde_json::from_str::<ReleaseResponse>(&response)?;
+        let response = HttpClient::new().get(uri).default_headers().send().await?;
+        let response = Response::<Json, ReleaseResponse>::async_from(response).await;
+
+        let release: ReleaseResponse = response
+            .collect()
+            .context("Cannot collect json from `Get Release` response")?;
 
         Ok(Release::new(
             release.id,
@@ -261,11 +295,21 @@ impl GithubClient {
             pr_number
         );
 
-        let request = AssigneesRequest::new(assignees);
+        let request = AssigneesRequest::new(assignees).into_request()?;
+        let response = HttpClient::new()
+            .post(uri)
+            .default_headers()
+            .body(request)
+            .send()
+            .await?;
+        let response = Response::<Json, String>::async_from(response).await;
 
-        let body: String = serde_json::to_string(&request)?;
-
-        post!(&uri, body)?;
+        match response {
+            Response::Success(response) => log::debug!("Assignees set: {}", response.payload),
+            Response::Error(error) => {
+                log::error!("Error setting assignees: {}", error.message)
+            }
+        };
 
         Ok(())
     }
@@ -285,11 +329,22 @@ impl GithubClient {
             pr_number
         );
 
-        let request = LabelsRequest::new(labels);
+        let request = LabelsRequest::new(labels).into_request()?;
 
-        let body: String = serde_json::to_string(&request)?;
+        let response = HttpClient::new()
+            .post(uri)
+            .default_headers()
+            .body(request)
+            .send()
+            .await?;
+        let response = Response::<Json, String>::async_from(response).await;
 
-        post!(&uri, body)?;
+        match response {
+            Response::Success(response) => log::debug!("Labels set: {}", response.payload),
+            Response::Error(error) => {
+                log::error!("Error setting labels: {}", error.message)
+            }
+        };
 
         Ok(())
     }
