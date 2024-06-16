@@ -17,12 +17,13 @@ use anyhow::Result;
 use handler::BuilderExecutor;
 use std::io::Cursor;
 
-pub struct ReleaseDto {
+pub struct ReleaseOutput {
     pub checksum: Checksum,
+    pub tag_name: String,
     pub tarball_url: String,
 }
 
-pub async fn release(release_config: &ReleaseConfig) -> Result<ReleaseDto> {
+pub async fn release(release_config: &ReleaseConfig) -> Result<ReleaseOutput> {
     let tag = git::get_current_tag(cwd!())?;
 
     log::debug!("getting/creating release");
@@ -34,8 +35,9 @@ pub async fn release(release_config: &ReleaseConfig) -> Result<ReleaseDto> {
     log::debug!("generating checksum");
     let checksum = Checksum::create(Cursor::new(tarball))?;
 
-    let dto = ReleaseDto {
+    let dto = ReleaseOutput {
         checksum,
+        tag_name: release.tag_name.to_owned(),
         tarball_url: release.archive_url(&release_config.compression),
     };
     Ok(dto)

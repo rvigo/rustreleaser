@@ -49,6 +49,21 @@ macro_rules! get {
 }
 
 #[macro_export]
+macro_rules! get_bytes {
+    ($url:expr) => {{
+        use $crate::github::macros::Headers;
+
+        $crate::http::HttpClient::new()
+            .get($url)
+            .default_headers()
+            .send()
+            .await?
+            .bytes()
+            .await
+    }};
+}
+
+#[macro_export]
 macro_rules! post {
     ($url:expr, $body:expr) => {{
         use $crate::{github::macros::Headers, http::ResponseHandler};

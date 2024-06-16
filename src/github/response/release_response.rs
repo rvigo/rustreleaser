@@ -6,4 +6,5 @@ pub struct ReleaseResponse {
     pub name: String,
     pub tarball_url: String,
     pub zipball_url: String,
+    pub tag_name: String,
 }

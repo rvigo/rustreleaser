@@ -9,6 +9,7 @@ pub struct Release {
     pub name: String,
     pub tarball_url: String,
     pub zipball_url: String,
+    pub tag_name: String,
 }
 
 impl Release {
@@ -19,6 +20,7 @@ impl Release {
         name: impl Into<String>,
         tarball_url: impl Into<String>,
         zipball_url: impl Into<String>,
+        tag_name: impl Into<String>,
     ) -> Self {
         Release {
             id,
@@ -27,6 +29,7 @@ impl Release {
             name: name.into(),
             tarball_url: tarball_url.into(),
             zipball_url: zipball_url.into(),
+            tag_name: tag_name.into(),
         }
     }
     pub fn archive_url(&self, compression: &Compression) -> String {

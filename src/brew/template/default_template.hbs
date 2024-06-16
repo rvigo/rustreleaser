@@ -11,13 +11,21 @@ class {{ name }} < Formula
   homepage "{{ homepage }}"
   {{ /if }}
   url "{{ url }}"
-  {{!-- version "{{ version }}" --}}
+  {{ #if version }}
+  version "{{ version }}"
+  {{ /if }}
   sha256 "{{ tarball_checksum }}"
   {{ #if license }}
   license "{{ license }}"
   {{ /if }}
   {{ #if head }}
   head "{{ head.url }}"{{ #if head.branch }}, branch: "{{ head.branch }}"{{ /if }}
+  {{ /if }}
+  {{ #if dependencies }}
+
+  {{ #each dependencies }}
+  depends_on "{{ name }}" => :{{ one_or_many symbol }}
+  {{ /each }}
   {{ /if }}
 
   def install

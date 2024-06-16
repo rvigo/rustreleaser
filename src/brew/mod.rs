@@ -1,18 +1,15 @@
+pub mod dependency;
 pub mod repository;
 mod template;
 
 use self::repository::Repository;
+use crate::config::{BrewConfig, CommitterConfig, PullRequestConfig};
 use crate::{
     brew::template::handlebars,
     checksum::Checksum,
     config::Head,
-    cwd,
-    git::{committer::Committer, tag::Tag},
-    github::{github_client, handler::BuilderExecutor, ReleaseDto},
-};
-use crate::{
-    config::{BrewConfig, CommitterConfig, PullRequestConfig},
-    git,
+    git::committer::Committer,
+    github::{github_client, handler::BuilderExecutor, ReleaseOutput},
 };
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -32,22 +29,28 @@ pub struct Brew {
     pub commit_author: Option<CommitterConfig>,
     pub install_info: String,
     pub repository: Repository,
-    pub version: String,
+    pub version: Option<String>,
     pub pull_request: Option<PullRequestConfig>,
     #[serde(serialize_with = "serialize_checksum")]
     pub tarball_checksum: Checksum,
     pub url: String,
+    pub dependencies: Vec<dependency::DependsOn>,
 }
 
 impl Brew {
-    pub fn new(brew: BrewConfig, tag: Tag, checksum: Checksum, tarball_url: String) -> Brew {
-        Brew {
+    pub fn new(
+        brew: BrewConfig,
+        version: Option<String>,
+        checksum: Checksum,
+        tarball_url: String,
+    ) -> Result<Brew> {
+        let brew = Brew {
             name: captalize(brew.name),
             description: captalize(brew.description),
             homepage: brew.homepage,
             install_info: brew.install.trim().to_owned(),
             repository: brew.repository,
-            version: tag.strip_v_prefix().to_owned(),
+            version,
             license: brew.license,
             head: brew.head,
             test: brew.test,
@@ -57,7 +60,10 @@ impl Brew {
             pull_request: brew.pull_request,
             tarball_checksum: checksum,
             url: tarball_url,
-        }
+            dependencies: brew.dependencies.into_iter().map(Into::into).collect(),
+        };
+
+        Ok(brew)
     }
 }
 
@@ -68,13 +74,18 @@ where
     serializer.serialize_str(checksum.value())
 }
 
-pub async fn publish(brew_config: BrewConfig, dto: ReleaseDto) -> Result<String> {
+pub async fn publish(brew_config: BrewConfig, release_output: ReleaseOutput) -> Result<String> {
+    let version = if brew_config.with_version {
+        Some(release_output.tag_name)
+    } else {
+        None
+    };
     let brew = Brew::new(
         brew_config,
-        git::get_current_tag(cwd!())?,
-        dto.checksum,
-        dto.tarball_url,
-    );
+        version,
+        release_output.checksum,
+        release_output.tarball_url,
+    )?;
 
     let data = serialize(&brew).context("Cannot serialize the formula file")?;
 
@@ -172,17 +183,14 @@ impl From<CommitterConfig> for Committer {
 mod tests {
     use super::serialize;
     use crate::{
-        brew::{repository::Repository, Brew},
+        brew::{dependency::Symbol, repository::Repository, Brew},
         checksum::Checksum,
-        config::BrewConfig,
-        git::tag::Tag,
+        config::{BrewConfig, DependsOnConfig, OneOrMany},
     };
     use std::io::Cursor;
 
     #[test]
     fn should_serialize_tag_without_v() {
-        let tag = Tag::new("v1.0.0");
-
         let brew_config = BrewConfig {
             name: "test".to_owned(),
             description: "test".to_owned(),
@@ -199,18 +207,24 @@ mod tests {
             commit_message: "test".to_owned(),
             commit_author: None,
             pull_request: None,
+            dependencies: vec![DependsOnConfig {
+                name: "test".to_owned(),
+                symbol: OneOrMany::One(Symbol::Build),
+            }],
+            with_version: false,
         };
 
         let cursor = Cursor::new(b"Hello, world!");
         let brew = Brew::new(
             brew_config,
-            tag,
+            None,
             Checksum::create(cursor).unwrap(),
             "url.com".to_owned(),
-        );
+        )
+        .unwrap();
 
         let serialized = serialize(&brew);
-
-        assert!(serialized.is_ok());
+        println!("{}", &serialized.unwrap());
+        // assert!(serialized.is_ok());
     }
 }

@@ -1,4 +1,7 @@
-use crate::{brew::repository::Repository, compression::Compression};
+use crate::{
+    brew::{dependency::Symbol, repository::Repository},
+    compression::Compression,
+};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +49,8 @@ pub struct BrewConfig {
     pub commit_author: Option<CommitterConfig>,
     pub pull_request: Option<PullRequestConfig>,
     pub repository: Repository,
+    pub dependencies: Vec<DependsOnConfig>,
+    pub with_version: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -124,5 +129,27 @@ pub struct ReleaseConfig {
 impl ReleaseConfig {
     pub fn target_branch() -> String {
         MAIN_BRANCH_NAME.to_owned()
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DependsOnConfig {
+    pub name: String,
+    pub symbol: OneOrMany<Symbol>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OneOrMany<T> {
+    One(T),
+    Many(Vec<T>),
+}
+
+impl<T> From<OneOrMany<T>> for Vec<T> {
+    fn from(from: OneOrMany<T>) -> Self {
+        match from {
+            OneOrMany::One(val) => vec![val],
+            OneOrMany::Many(vec) => vec,
+        }
     }
 }

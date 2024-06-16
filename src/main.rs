@@ -16,13 +16,14 @@ async fn main() -> Result<()> {
 
     log::info!("Starting");
     let config = Config::load().await.context("Cannot load config file")?;
+
     let release_config = config.release;
 
     log::info!("Creating release and getting checksum");
-    let checksum = github::release(&release_config).await?;
+    let release_output = github::release(&release_config).await?;
 
     log::info!("Creating brew formula");
-    brew::publish(config.brew, checksum)
+    brew::publish(config.brew, release_output)
         .await
         .context("Cannot publish the brew formula")?;
 

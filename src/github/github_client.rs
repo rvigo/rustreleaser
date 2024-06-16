@@ -1,6 +1,5 @@
 use super::{
     dto::{pull_request_dto::PullRequestDto, release_dto::ReleaseDto},
-    macros::Headers,
     request::{
         assignees_request::AssigneesRequest, branch_ref_request::BranchRefRequest,
         create_release_request::CreateReleaseRequest, labels_request::LabelsRequest,
@@ -11,7 +10,7 @@ use super::{
     },
 };
 use crate::{
-    get,
+    get, get_bytes,
     git::tag::Tag,
     github::{
         dto::commit_info_dto::CommitInfoDto, release::Release,
@@ -209,17 +208,12 @@ impl GithubClient {
             release.name,
             release.tarball_url,
             release.zipball_url,
+            release.tag_name,
         ))
     }
 
     pub async fn download_tarball(&self, url: &str) -> Result<Vec<u8>> {
-        let response = crate::http::HttpClient::new()
-            .get(url)
-            .default_headers()
-            .send()
-            .await?
-            .bytes()
-            .await?;
+        let response = get_bytes!(url)?;
 
         Ok(response.to_vec())
     }
@@ -248,6 +242,7 @@ impl GithubClient {
             release.name,
             release.tarball_url,
             release.zipball_url,
+            release.tag_name,
         ))
     }
 
