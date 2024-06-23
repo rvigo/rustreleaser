@@ -8,9 +8,12 @@ pub struct BranchRefRequest {
 
 impl BranchRefRequest {
     pub fn new(r#ref: impl Into<String>, sha: impl Into<String>) -> Self {
+        let r#ref: String = r#ref.into();
+        let sha: String = sha.into();
+
         Self {
-            r#ref: format!("refs/heads/{}", r#ref.into()),
-            sha: sha.into(),
+            r#ref: format!("refs/heads/{}", r#ref),
+            sha,
         }
     }
 }

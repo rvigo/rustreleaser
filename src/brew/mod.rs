@@ -4,6 +4,7 @@ mod template;
 
 use self::repository::Repository;
 use crate::config::{BrewConfig, CommitterConfig, PullRequestConfig};
+use crate::http::response::ResponseError;
 use crate::{
     brew::template::handlebars,
     checksum::Checksum,
@@ -87,12 +88,13 @@ pub async fn publish(brew_config: BrewConfig, release_output: ReleaseOutput) -> 
         release_output.tarball_url,
     )?;
 
+    log::info!("Creating the formula file");
     let data = serialize(&brew).context("Cannot serialize the formula file")?;
 
     write_file(format!("{}.rb", brew.name.to_lowercase()), &data)
         .context("Cannot write to the formula file")?;
 
-    log::debug!("Creating pull request");
+    log::info!("Updating brew tap");
     push_formula(brew)
         .await
         .context("Cannot create the pull request for the formula")?;
@@ -120,7 +122,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
     let committer = brew.commit_author.map(Committer::from).unwrap_or_default();
     let repo = github_client::instance().repo(&brew.repository.owner, &brew.repository.name);
 
-    log::debug!("Creating branch");
+    log::info!("Creating branch {}", &pull_request.head);
     let sha = repo
         .branch(&pull_request.base)
         .get_commit_sha()
@@ -133,16 +135,18 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .sha(sha.sha)
         .execute()
         .await
-        .context("Error creating the branch")?;
+        .context("Error creating branch")
+        .continue_if_exists()?;
 
     let formula_name = format!("{}.rb", brew.name.to_lowercase());
 
+    log::debug!("Reading new formula file");
     let content = fs::read_to_string(&formula_name).context(format!(
-        "Cannot read the rb file with name {}",
+        "Cannot read the .rb file with name {}",
         formula_name
     ))?;
 
-    log::debug!("Updating formula");
+    log::info!("Commiting the new formula");
     repo.branch(&pull_request.head)
         .upsert_file()
         .path(formula_name)
@@ -153,7 +157,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .await
         .context("Error uploading file to head branch")?;
 
-    log::debug!("Creating pull request");
+    log::debug!("Creating pull request from new branch");
     repo.pull_request()
         .create()
         .assignees(pull_request.assignees.unwrap_or_default())
@@ -163,10 +167,11 @@ async fn push_formula(brew: Brew) -> Result<()> {
         .labels(pull_request.labels.unwrap_or_default())
         .title(pull_request.title.unwrap_or_default())
         .committer(&committer)
-        .overwrite(false) // TODO implement
         .execute()
         .await
-        .context("Error creating pull request")?;
+        .context("Error creating pull request")
+        .continue_if_exists()?;
+
     Ok(())
 }
 
@@ -175,6 +180,25 @@ impl From<CommitterConfig> for Committer {
         Committer {
             author: value.name,
             email: value.email,
+        }
+    }
+}
+
+pub trait ContinueIfExists<T> {
+    fn continue_if_exists(self) -> Result<()>;
+}
+
+impl<T> ContinueIfExists<T> for Result<T> {
+    fn continue_if_exists(self) -> Result<()> {
+        match self {
+            Ok(_) => Ok(()),
+            Err(err) => match err.downcast_ref::<ResponseError>() {
+                Some(alread_exists) => {
+                    log::warn!("{}", alread_exists);
+                    Ok(())
+                }
+                _ => Err(err),
+            },
         }
     }
 }

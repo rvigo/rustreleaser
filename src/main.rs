@@ -27,5 +27,6 @@ async fn main() -> Result<()> {
         .await
         .context("Cannot publish the brew formula")?;
 
+    log::info!("Finished");
     Ok(())
 }

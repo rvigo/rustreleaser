@@ -15,7 +15,6 @@ pub struct CreatePullRequestBuilder {
     pub committer: Option<Committer>,
     pub base: String,
     pub head: String,
-    pub overwrite: bool,
 }
 
 impl CreatePullRequestBuilder {
@@ -30,7 +29,6 @@ impl CreatePullRequestBuilder {
             committer: None,
             base: String::new(),
             head: String::new(),
-            overwrite: false,
         }
     }
 
@@ -68,11 +66,6 @@ impl CreatePullRequestBuilder {
         self.head = head.into();
         self
     }
-
-    pub fn overwrite(mut self, overwrite: bool) -> Self {
-        self.overwrite = overwrite;
-        self
-    }
 }
 
 impl BuilderExecutor for CreatePullRequestBuilder {
@@ -80,15 +73,14 @@ impl BuilderExecutor for CreatePullRequestBuilder {
 
     async fn execute(self) -> anyhow::Result<Self::Output> {
         let pr = PullRequestDto::new(
-            self.owner,
-            self.repo,
-            self.title,
-            self.head,
-            self.base,
+            &self.owner,
+            &self.repo,
+            &self.title,
+            &self.head,
+            &self.base,
             self.body.unwrap_or_default(),
             self.assignees.unwrap_or_default(),
             self.labels.unwrap_or_default(),
-            self.overwrite,
         );
 
         github_client::instance().create_pull_request(pr).await

@@ -23,13 +23,13 @@ pub struct ReleaseOutput {
 pub async fn release(release_config: &ReleaseConfig) -> Result<ReleaseOutput> {
     let tag = git::get_current_tag(cwd!())?;
 
-    log::debug!("getting/creating release");
+    log::info!("Getting release");
     let release = get_release(release_config, &tag).await?;
 
     let tarball = release
         .download_tarball(&release_config.compression)
         .await?;
-    log::debug!("generating checksum");
+    log::info!("Generating checksum from tarball");
     let checksum = Checksum::create(Cursor::new(tarball))?;
 
     let dto = ReleaseOutput {
@@ -44,12 +44,12 @@ async fn get_release(release_config: &ReleaseConfig, tag: &Tag) -> Result<Releas
     let res = get_release_by_tag(release_config, tag).await;
     match res {
         Ok(release) => {
-            log::info!("found release by tag: {:?}", tag);
+            log::info!("Found release for {:?}", tag);
             Ok(release)
         }
         Err(err) => {
             log::warn!(
-                "cannot find a release by tag: {:?}, trying to create a new one",
+                "Cannot find a release for: {:?}, trying to create a new one",
                 err
             );
 
