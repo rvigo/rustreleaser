@@ -376,7 +376,7 @@ impl GithubClient {
             .body(Body::Json(body))
             .send()
             .await
-            .context("Error commiting the file")?;
+            .context("Error committing the file")?;
 
         Ok(())
     }

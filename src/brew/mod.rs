@@ -146,7 +146,7 @@ async fn push_formula(brew: Brew) -> Result<()> {
         formula_name
     ))?;
 
-    log::info!("Commiting the new formula");
+    log::info!("Committing the new formula");
     repo.branch(&pull_request.head)
         .upsert_file()
         .path(formula_name)
@@ -193,8 +193,8 @@ impl<T> ContinueIfExists<T> for Result<T> {
         match self {
             Ok(_) => Ok(()),
             Err(err) => match err.downcast_ref::<ResponseError>() {
-                Some(alread_exists) => {
-                    log::warn!("{}", alread_exists);
+                Some(already_exists) => {
+                    log::warn!("{}", already_exists);
                     Ok(())
                 }
                 _ => Err(err),

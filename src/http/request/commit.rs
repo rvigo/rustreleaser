@@ -1,15 +1,13 @@
-use serde::Serialize;
-
-use crate::git::committer::Committer;
-
 use super::committer_request::CommitterRequest;
+use crate::git::committer::Committer;
+use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct CommitRequest {
     pub message: String,
     pub tree: String,
     pub parents: Vec<String>,
-    pub commiter: CommitterRequest,
+    pub committer: CommitterRequest,
 }
 
 impl CommitRequest {
@@ -18,7 +16,7 @@ impl CommitRequest {
             message: message.into(),
             tree: tree.into(),
             parents,
-            commiter: Committer::default().into(),
+            committer: Committer::default().into(),
         }
     }
 }
